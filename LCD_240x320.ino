@@ -1,6 +1,4 @@
 #include <LovyanGFX.hpp>
-#include <WiFi.h>
-#include <time.h>
 
 // 传感器数据结构
 struct SensorData {
@@ -147,10 +145,11 @@ void drawHeader() {
   lcd.setCursor(10, 8);
   lcd.print("Greenhouse Monitor");
   
-  // 显示当前时间
+  // 显示时间
   lcd.setTextSize(1);
-  lcd.setCursor(lcd.width() - 40, 12);
-  lcd.printf("%02d:%02d", (millis()/60000)%24, (millis()/1000/60)%60);
+  lcd.setCursor(lcd.width() - 50, 12);
+  String timeStr = getFormattedTime();
+  lcd.print(timeStr);
 }
 
 // 绘制传感器数据项
@@ -272,6 +271,9 @@ void setup(void)
   
   // 初始化温湿度传感器
   initTemperatureHumiditySensor();  // 温湿度传感器
+  
+  // 初始化时间系统
+  initTimeSystem();
   
   // 绘制初始界面
   drawHeader();

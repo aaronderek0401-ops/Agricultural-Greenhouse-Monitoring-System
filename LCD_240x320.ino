@@ -4,6 +4,8 @@
 struct SensorData {
   float temperature;    // 温度 (°C)
   float humidity;      // 湿度 (%)
+  float pressure;      // 气压 (hPa)
+  float elevation;     // 海拔高度 (m)
   int co2;            // 二氧化碳浓度 (ppm)
   float soilMoisture; // 土壤湿度 (%)
   float lightIntensity; // 光照强度 (lux)
@@ -81,6 +83,11 @@ public:
 
 static LGFX lcd;
 static SensorData sensorData;
+
+// 传感器连接状态
+static bool aht30Connected = false;
+static bool bmp180Connected = false;
+
 static unsigned long lastUpdate = 0;
 static const unsigned long UPDATE_INTERVAL = 2000; // 2秒更新一次
 
@@ -108,10 +115,24 @@ struct Thresholds {
   float soilMin = 40.0, soilMax = 70.0;
 } thresholds;
 
-// 读取传感器数据 (目前只读取温湿度)
+// 读取传感器数据 (温湿度 + 气压)
 void readSensors() {
   // 读取温湿度传感器
-  readTemperatureHumidity(sensorData.temperature, sensorData.humidity);
+  if (aht30Connected) {
+    readTemperatureHumidity(sensorData.temperature, sensorData.humidity);
+  } else {
+    sensorData.temperature = -999;  // 特殊值表示未连接
+    sensorData.humidity = -999;
+  }
+  
+  // 读取气压传感器
+  if (bmp180Connected) {
+    float bmpTemp;
+    readPressure(bmpTemp, sensorData.pressure, sensorData.elevation);
+  } else {
+    sensorData.pressure = -999;     // 特殊值表示未连接
+    sensorData.elevation = -999;
+  }
   
   // 其他传感器暂时使用模拟数据
   sensorData.co2 = 800 + random(-100, 100);
@@ -163,14 +184,26 @@ void drawSensorItem(int y, const char* label, float value, const char* unit, uin
   lcd.setCursor(LEFT_COL, y + 8);
   lcd.print(label);
   
-  // 绘制数值
-  lcd.setTextColor(VALUE_COLOR);
-  lcd.setTextSize(1.7);
-  lcd.setCursor(RIGHT_COL, y + 5);
-  lcd.printf("%.1f%s", value, unit);
-  
-  // 绘制状态指示器
-  lcd.fillCircle(STATUS_COL, y + 12, 5, statusColor);
+  // 检查是否为未连接状态
+  if (value == -999) {
+    // 显示disconnected
+    lcd.setTextColor(ALARM_COLOR);
+    lcd.setTextSize(1.2);
+    lcd.setCursor(RIGHT_COL, y + 8);
+    lcd.print("disconnected");
+    
+    // 绘制红色状态指示器
+    lcd.fillCircle(STATUS_COL, y + 12, 5, ALARM_COLOR);
+  } else {
+    // 正常显示数值
+    lcd.setTextColor(VALUE_COLOR);
+    lcd.setTextSize(1.7);
+    lcd.setCursor(RIGHT_COL, y + 5);
+    lcd.printf("%.1f%s", value, unit);
+    
+    // 绘制状态指示器
+    lcd.fillCircle(STATUS_COL, y + 12, 5, statusColor);
+  }
 }
 
 // 绘制整数传感器数据项
@@ -238,13 +271,23 @@ void updateDisplay() {
   int y = HEADER_HEIGHT + 5;
   
   // 绘制各个传感器数据
-  drawSensorItem(y, "Temperature", sensorData.temperature, "C", 
-                 getStatusColor(sensorData.temperature, thresholds.tempMin, thresholds.tempMax));
+  uint16_t tempColor = (sensorData.temperature == -999) ? ALARM_COLOR : 
+                       getStatusColor(sensorData.temperature, thresholds.tempMin, thresholds.tempMax);
+  drawSensorItem(y, "Temperature", sensorData.temperature, "C", tempColor);
   y += ITEM_HEIGHT;
   
-  drawSensorItem(y, "Humidity", sensorData.humidity, "%", 
-                 getStatusColor(sensorData.humidity, thresholds.humidityMin, thresholds.humidityMax));
+  uint16_t humidColor = (sensorData.humidity == -999) ? ALARM_COLOR : 
+                        getStatusColor(sensorData.humidity, thresholds.humidityMin, thresholds.humidityMax);
+  drawSensorItem(y, "Humidity", sensorData.humidity, "%", humidColor);
   y += ITEM_HEIGHT;
+  
+  uint16_t pressureColor = (sensorData.pressure == -999) ? ALARM_COLOR : GOOD_COLOR;
+  drawSensorItem(y, "Pressure", sensorData.pressure, "hPa", pressureColor);
+  y += ITEM_HEIGHT;
+  
+  // uint16_t elevationColor = (sensorData.elevation == -999) ? ALARM_COLOR : GOOD_COLOR;
+  // drawSensorItem(y, "Elevation", sensorData.elevation, "m", elevationColor);
+  // y += ITEM_HEIGHT;
   
   drawSensorItemInt(y, "CO2", sensorData.co2, "ppm", getCO2StatusColor(sensorData.co2));
   y += ITEM_HEIGHT;
@@ -263,19 +306,79 @@ void updateDisplay() {
 void setup(void)
 {
   Serial.begin(115200);
+  Serial.println("=== Greenhouse Monitoring System ===");
+  Serial.println("Initializing...");
   
-  // 初始化LCD显示屏
+  // 首先初始化LCD显示屏
   lcd.init();
   lcd.setRotation(0); // 设置竖屏
   lcd.fillScreen(BG_COLOR); // 清屏
   
-  // 初始化温湿度传感器
-  initTemperatureHumiditySensor();  // 温湿度传感器
+  // 立即显示启动界面
+  drawHeader();
+  lcd.setTextColor(TEXT_COLOR);
+  lcd.setTextSize(1.5);
+  lcd.setCursor(50, 100);
+  lcd.print("System Starting...");
+  lcd.setCursor(20, 130);
+  lcd.print("Initializing Sensors");
   
   // 初始化时间系统
   initTimeSystem();
   
-  // 绘制初始界面
+  // 现在尝试初始化传感器（启用温湿度传感器）
+  Serial.println("Sensor initialization mode: ALL SENSORS ENABLED");
+  
+  // 尝试初始化温湿度传感器
+  lcd.setCursor(20, 160);
+  lcd.print("AHT30...");
+  Serial.println("Attempting AHT30 init...");
+  aht30Connected = initTemperatureHumiditySensor();  // 温湿度传感器
+  Serial.printf("AHT30 result: %s\n", aht30Connected ? "SUCCESS" : "FAILED");
+  
+  // 尝试初始化气压传感器
+  lcd.setCursor(20, 180);
+  lcd.print("BMP180...");
+  Serial.println("Attempting BMP180 init...");
+  bmp180Connected = initPressureSensor();  // 气压传感器
+  Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
+  
+  /*
+  // 等LCD界面正常工作后，逐个启用传感器测试
+  Serial.println("Initializing sensors...");
+  
+  // 先尝试温湿度传感器
+  lcd.setCursor(20, 160);
+  lcd.print("AHT30...");
+  Serial.println("Attempting AHT30 init...");
+  aht30Connected = initTemperatureHumiditySensor();  // 温湿度传感器
+  Serial.printf("AHT30 result: %s\n", aht30Connected ? "SUCCESS" : "FAILED");
+  
+  // 再尝试气压传感器
+  lcd.setCursor(20, 180);
+  lcd.print("BMP180...");
+  Serial.println("Attempting BMP180 init...");
+  bmp180Connected = initPressureSensor();             // 气压传感器
+  Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
+  */
+  
+  // 显示传感器状态
+  lcd.setCursor(20, 210);
+  if (aht30Connected && bmp180Connected) {
+    lcd.setTextColor(GOOD_COLOR);
+    lcd.print("All sensors ready!");
+  } else if (aht30Connected || bmp180Connected) {
+    lcd.setTextColor(WARNING_COLOR);
+    lcd.print("Some sensors ready");
+  } else {
+    lcd.setTextColor(ALARM_COLOR);
+    lcd.print("No sensors found");
+  }
+  
+  delay(2000); // 显示状态2秒
+  
+  // 清屏并绘制正常界面
+  lcd.fillScreen(BG_COLOR);
   drawHeader();
   
   // 初始化传感器数据
@@ -283,6 +386,9 @@ void setup(void)
   updateDisplay();
   
   Serial.println("Greenhouse Monitoring System Started");
+  Serial.printf("Sensors: AHT30=%s, BMP180=%s\n", 
+                aht30Connected ? "OK" : "FAIL", 
+                bmp180Connected ? "OK" : "FAIL");
 }
 
 void loop(void)
@@ -303,9 +409,39 @@ void loop(void)
     updateDisplay();
     
     // 串口输出数据用于调试
-    Serial.printf("Temp:%.1fC Humid:%.1f%% CO2:%dppm Soil:%.1f%% Light:%.1flux\n", 
-                  sensorData.temperature, sensorData.humidity, sensorData.co2, 
-                  sensorData.soilMoisture, sensorData.lightIntensity);
+    Serial.print("Sensors: ");
+    
+    // 温度
+    if (sensorData.temperature == -999) {
+      Serial.print("Temp:disconnected ");
+    } else {
+      Serial.printf("Temp:%.1fC ", sensorData.temperature);
+    }
+    
+    // 湿度
+    if (sensorData.humidity == -999) {
+      Serial.print("Humid:disconnected ");
+    } else {
+      Serial.printf("Humid:%.1f%% ", sensorData.humidity);
+    }
+    
+    // 气压
+    if (sensorData.pressure == -999) {
+      Serial.print("Pressure:disconnected ");
+    } else {
+      Serial.printf("Pressure:%.1fhPa ", sensorData.pressure);
+    }
+    
+    // 海拔
+    if (sensorData.elevation == -999) {
+      Serial.print("Elevation:disconnected ");
+    } else {
+      Serial.printf("Elevation:%.1fm ", sensorData.elevation);
+    }
+    
+    // 其他传感器（模拟数据）
+    Serial.printf("CO2:%dppm Soil:%.1f%% Light:%.1flux\n", 
+                  sensorData.co2, sensorData.soilMoisture, sensorData.lightIntensity);
   }
   
   delay(100); // 短暂延时，避免过度占用CPU

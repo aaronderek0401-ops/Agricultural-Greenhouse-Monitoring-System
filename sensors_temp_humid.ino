@@ -1,22 +1,32 @@
 #include <Wire.h>             // I2C通信库，用于传感器与开发板之间的数据传输
 #include <Adafruit_AHTX0.h>   // AHT系列温湿度传感器驱动库（支持AHT10/AHT20/AHT30）
+
+
+#define NEW_SDA_PIN 6        // I2C数据引脚(SDA)，连接到开发板的D3引脚
+#define NEW_SCL_PIN 5        // I2C时钟引脚(SCL)，连接到开发板的D2引脚
 Adafruit_AHTX0 aht;
-#define NEW_SDA_PIN 7        // I2C数据引脚(SDA)，连接到开发板的D4引脚
-#define NEW_SCL_PIN 6
 
-
-void initTemperatureHumiditySensor() {
-  Serial.begin(9600); // 初始化打印串口，波特率为9600
-  Serial.println("AHT30 demo!");
+bool initTemperatureHumiditySensor() {
+  Serial.println("AHT30 initializing...");
+  Serial.println("Step 1: Starting Wire.begin()");
+  
   Wire.begin(NEW_SDA_PIN, NEW_SCL_PIN);    // 初始化I2C总线，指定自定义的SDA和SCL引脚
-
-  if ( !aht.begin()) {                     // 调用begin()方法初始化传感器，返回true表示成功
-    while(1){
-      Serial.println("没找到AHT30传感器,请检查硬件连接"); // 初始化失败时打印错误信息
-      delay(1000);                              // 进入死循环，停止程序运行（方便排查硬件问题）
-    }
+  Serial.println("Step 2: Wire.begin() completed");
+  
+  delay(100); // 短暂延时让I2C稳定
+  Serial.println("Step 3: About to call aht.begin()");
+  
+  // 尝试初始化，如果卡住就说明aht.begin()有问题
+  bool success = aht.begin();
+  Serial.printf("Step 4: aht.begin() returned %s\n", success ? "true" : "false");
+  
+  if (success) {
+    Serial.println("AHT30 connected successfully");
+    return true;
+  } else {
+    Serial.println("AHT30 sensor not found! Skipping...");
+    return false;
   }
-  Serial.println("AHT30 连接正常");
 }
 
 void readTemperatureHumidity(float &temperature, float &humidity) {

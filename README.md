@@ -2,16 +2,24 @@
 
 ## 项目概述
 
-这是一个基于ESP32和240x320 LCD显示屏的温室监控系统，目前主要功能是读取DHT22温湿度传感器数据并在屏幕上显示。其他传感器数据（CO2、土壤湿度、光照强度）暂时使用模拟数据显示。
+这是一个基于ESP32和240x320 LCD显示屏的温室监控系统，目前1. **硬件连接**：按照上面的引脚分配连接LCD和传感器
+
+2. **安装库**：在Arduino IDE中安装必要的库
+
+3. **修改引脚**：如需修改引脚，在对应的传感器文件中修改：
+   - AHT30引脚：在 `sensors_temp_humid.ino` 中修改 `NEW_SDA_PIN` 和 `NEW_SCL_PIN`
+   - BMP180引脚：在 `sensors_pressure.ino` 中修改 `BMP_SDA_PIN` 和 `BMP_SCL_PIN`
+
+4. **上传代码**：在Arduino IDE中打开`LCD_240x320.ino`，上传到ESP32DHT22温湿度传感器数据并在屏幕上显示。其他传感器数据（CO2、土壤湿度、光照强度）暂时使用模拟数据显示。
 
 ## 当前文件结构
 
 ```
 LCD_240x320/
 ├── LCD_240x320.ino          # 主程序文件（LCD显示 + 主循环）
-├── sensors_temp_humid.ino   # DHT22温湿度传感器模块
+├── sensors_temp_humid.ino   # AHT30温湿度传感器模块
+├── sensors_pressure.ino     # BMP180气压传感器模块
 ├── time_manager.ino         # 时间管理模块
-├── config.ino              # 引脚配置和阈值设置
 └── README.md               # 说明文档
 ```
 
@@ -27,13 +35,19 @@ LCD显示屏 (ST7789):
 ├── CS   → GPIO 13
 └── BLK  → GPIO 14
 
-DHT22温湿度传感器:
-└── DATA → GPIO 2
+AHT30温湿度传感器 (I2C):
+├── SDA → GPIO 7
+└── SCL → GPIO 6
+
+BMP180气压传感器 (I2C):
+├── SDA → GPIO 5
+└── SCL → GPIO 4
 ```
 
 ### 电源连接
 - LCD显示屏：3.3V
-- DHT22传感器：3.3V或5V
+- AHT30传感器：3.3V
+- BMP180传感器：3.3V
 
 ## 需要安装的库
 
@@ -42,15 +56,22 @@ DHT22温湿度传感器:
 1. **LovyanGFX** - LCD显示库
    - 工具 → 管理库 → 搜索"LovyanGFX"
 
-2. **DHT sensor library** - DHT22温湿度传感器
-   - 工具 → 管理库 → 搜索"DHT sensor library" (by Adafruit)
+2. **Adafruit AHTX0** - AHT30温湿度传感器
+   - 工具 → 管理库 → 搜索"Adafruit AHTX0"
+
+3. **Adafruit BMP085 Library** - BMP180气压传感器
+   - 工具 → 管理库 → 搜索"Adafruit BMP085"
 
 ## 功能特性
 
 ### ✅ 已实现功能
 - 240x320 LCD显示界面
-- DHT22温湿度传感器实时读取
-- 传感器数据状态指示（正常/警告/异常）
+- **非阻塞传感器初始化**（3秒超时保护，不会卡住）
+- AHT30温湿度传感器实时读取
+- BMP180气压传感器实时读取（气压值和海拔估算）
+- **传感器连接状态检测**（显示"disconnected"当传感器未连接）
+- **启动状态显示**（显示传感器初始化进度）
+- 传感器数据状态指示（正常/警告/异常/未连接）
 - 温湿度阈值监控
 - 运行时间显示（从设备启动开始计算）
 - 串口调试输出
@@ -60,6 +81,24 @@ DHT22温湿度传感器:
 - 土壤湿度显示（模拟数据）
 - 光照强度显示（模拟数据）
 - 设备状态显示（水泵、风扇、补光灯）
+
+## 启动流程
+
+1. **LCD优先初始化** - 确保屏幕能立即显示状态
+2. **显示启动界面** - "System Starting..." 和传感器初始化进度
+3. **传感器初始化** - 每个传感器有3秒超时保护
+4. **状态反馈** - 显示哪些传感器成功/失败
+5. **进入正常运行** - 即使部分传感器失败也能正常工作
+
+### 启动界面显示
+```
+Greenhouse Monitor  00:00
+System Starting...
+Initializing Sensors
+AHT30...
+BMP180...
+All sensors ready!    (或 "Some sensors ready" / "No sensors found")
+```
 
 ## 使用方法
 
@@ -79,10 +118,12 @@ DHT22温湿度传感器:
 
 ```
 ┌─────────────────────────┐
-│ Greenhouse Monitor 12:34│  ← 标题栏
+│ Greenhouse Monitor 01:23│  ← 标题栏
 ├─────────────────────────┤
 │ Temperature  25.3°C  ●  │  ← 温度（实际读取）
 │ Humidity     65.2%   ●  │  ← 湿度（实际读取）
+│ Pressure     1013hPa ●  │  ← 气压（实际读取）
+│ Elevation    100.5m  ●  │  ← 海拔（计算值）
 │ CO2          800ppm  ●  │  ← CO2（模拟数据）
 │ Soil Moist   55.0%   ●  │  ← 土壤湿度（模拟）
 │ Light        25000lux●  │  ← 光照（模拟数据）
@@ -96,24 +137,33 @@ DHT22温湿度传感器:
 ### 状态指示器颜色
 - 🟢 绿色：数值正常
 - 🟡 黄色：数值接近阈值边界
-- 🔴 红色：数值超出正常范围
+- 🔴 红色：数值超出正常范围或传感器未连接
+- **disconnected**：传感器初始化失败或未连接
 
 ## 配置说明
 
-在`config.ino`中可以修改：
+如需修改传感器引脚，直接在对应的传感器文件中修改：
 
+### AHT30温湿度传感器 (`sensors_temp_humid.ino`)
 ```cpp
-// DHT22传感器引脚
-#define DHT_PIN 2        // 数据引脚
-#define DHT_TYPE DHT22   // 传感器类型
+#define NEW_SDA_PIN 6        // SDA引脚
+#define NEW_SCL_PIN 5        // SCL引脚
+```
 
-// 温湿度阈值
-struct SensorThresholds {
-  float tempMin = 18.0;     // 最低温度 (°C)
-  float tempMax = 28.0;     // 最高温度 (°C)
-  float humidityMin = 60.0; // 最低湿度 (%)
-  float humidityMax = 80.0; // 最高湿度 (%)
-};
+### BMP180气压传感器 (`sensors_pressure.ino`)
+```cpp
+#define BMP_SDA_PIN 6        // SDA引脚
+#define BMP_SCL_PIN 5        // SCL引脚
+```
+
+### 传感器阈值
+温湿度的正常范围阈值在主文件的 `thresholds` 结构体中定义：
+```cpp
+struct Thresholds {
+  float tempMin = 18.0, tempMax = 28.0;     // 温度范围
+  float humidityMin = 60.0, humidityMax = 80.0; // 湿度范围
+  // ...
+} thresholds;
 ```
 
 ## 时间显示说明

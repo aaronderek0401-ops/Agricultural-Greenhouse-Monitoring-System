@@ -91,14 +91,18 @@ static bool bmp180Connected = false;
 static unsigned long lastUpdate = 0;
 static const unsigned long UPDATE_INTERVAL = 2000; // 2秒更新一次
 
-// 颜色定义
+// 颜色定义 (RGB565格式)
 #define BG_COLOR     0x0000      // 黑色背景
-#define HEADER_COLOR 0x07E0      // 绿色标题
+#define HEADER_COLOR 0xFFFF      // 绿色标题
 #define TEXT_COLOR   0xFFFF      // 白色文字
-#define VALUE_COLOR  0x07FF      // 青色数值
-#define ALARM_COLOR  0xF800      // 红色警告
-#define GOOD_COLOR   0x07E0      // 绿色正常
-#define WARNING_COLOR 0xFFE0     // 黄色警告
+#define VALUE_COLOR  0xFFFF      // 白色数值
+#define ALARM_COLOR  0x07FF      // 红色警告 √
+#define GOOD_COLOR   0xF81F      // 绿色正常 √
+#define WARNING_COLOR 0x001F     // 黄色警告 √
+
+// 0xFFE0 蓝色
+// 0xF800 天青色
+// 0x07E0 紫色
 
 // 显示布局参数
 #define HEADER_HEIGHT 30

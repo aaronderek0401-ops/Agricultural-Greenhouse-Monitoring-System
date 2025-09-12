@@ -92,10 +92,10 @@ static unsigned long lastUpdate = 0;
 static const unsigned long UPDATE_INTERVAL = 2000; // 2秒更新一次
 
 // 颜色定义 (RGB565格式)
-#define BG_COLOR     0x0000      // 黑色背景
+#define BG_COLOR     0x0000      // 白色背景
 #define HEADER_COLOR 0xFFFF      // 绿色标题
-#define TEXT_COLOR   0xFFFF      // 白色文字
-#define VALUE_COLOR  0xFFFF      // 白色数值
+#define TEXT_COLOR   0xFFFF      // 黑色文字
+#define VALUE_COLOR  0xFFFF      // 黑色数值
 #define ALARM_COLOR  0x07FF      // 红色警告 √
 #define GOOD_COLOR   0xF81F      // 绿色正常 √
 #define WARNING_COLOR 0x001F     // 黄色警告 √
@@ -111,10 +111,24 @@ static const unsigned long UPDATE_INTERVAL = 2000; // 2秒更新一次
 #define RIGHT_COL 130
 #define STATUS_COL 230
 
+// 折线图参数
+#define GRAPH_X 10           // 图表左边距
+#define GRAPH_Y 220          // 图表顶部位置
+#define GRAPH_WIDTH 220      // 图表宽度
+#define GRAPH_HEIGHT 80      // 图表高度
+#define MAX_POINTS 50        // 最大数据点数量
+
+// 温度历史数据
+float tempHistory[MAX_POINTS];
+int historyIndex = 0;
+bool historyFull = false;
+unsigned long lastGraphUpdate = 0;
+#define GRAPH_UPDATE_INTERVAL 10000  // 10秒更新一次图表数据
+
 // 阈值设定
 struct Thresholds {
   float tempMin = 18.0, tempMax = 28.0;
-  float humidityMin = 60.0, humidityMax = 80.0;
+  float humidityMin = 50.0, humidityMax = 80.0;
   int co2Min = 400, co2Max = 1200;
   float soilMin = 40.0, soilMax = 70.0;
 } thresholds;
@@ -227,6 +241,104 @@ void drawSensorItemInt(int y, const char* label, int value, const char* unit, ui
   lcd.fillCircle(STATUS_COL, y + 12, 5, statusColor);
 }
 
+// 添加温度数据到历史记录
+void addTemperatureData(float temp) {
+  if (temp == -999) return; // 跳过无效数据
+  
+  tempHistory[historyIndex] = temp;
+  historyIndex++;
+  
+  if (historyIndex >= MAX_POINTS) {
+    historyIndex = 0;
+    historyFull = true;
+  }
+}
+
+// 绘制温度折线图
+void drawTemperatureGraph() {
+  // 清除图表区域
+  lcd.fillRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT, BG_COLOR);
+  
+  // 绘制图表边框
+  lcd.drawRect(GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT, TEXT_COLOR);
+  
+  // 图表标题
+  lcd.setTextColor(HEADER_COLOR);
+  lcd.setTextSize(1);
+  lcd.setCursor(GRAPH_X + 5, GRAPH_Y - 15);
+  lcd.print("Temperature Trend (Celsius)");
+  
+  // 如果没有足够的数据，直接返回
+  int dataCount = historyFull ? MAX_POINTS : historyIndex;
+  if (dataCount < 2) return;
+  
+  // 计算温度范围
+  float minTemp = 999, maxTemp = -999;
+  float mintemp_ = 999, maxtemp_ = -999;
+
+  for (int i = 0; i < dataCount; i++) {
+    int idx = historyFull ? (historyIndex + i) % MAX_POINTS : i;
+    if (tempHistory[idx] < minTemp) minTemp = tempHistory[idx];
+    if (tempHistory[idx] > maxTemp) maxTemp = tempHistory[idx];
+  }
+  
+  // 添加一些边距
+  float tempRange = maxTemp - minTemp;
+  if (tempRange < 5) {
+    // 如果变化太小，固定显示范围
+    float center = (maxTemp + minTemp) / 2;
+    mintemp_ = center - 2.5;
+    maxtemp_ = center + 2.5;
+
+    // maxTemp = center + 2.5;
+    tempRange = 5;
+  } else {
+    mintemp_ = minTemp - tempRange * 0.1;
+    maxtemp_ = maxTemp + tempRange * 0.1;
+      // minTemp -= tempRange * 0.1;
+      // maxTemp += tempRange * 0.1;
+    tempRange = maxtemp_ - mintemp_;
+  }
+  
+  // 绘制Y轴刻度
+  // lcd.setTextColor(TEXT_COLOR);
+  // lcd.setTextSize(0.8);
+  // lcd.setCursor(GRAPH_X - 25, GRAPH_Y + 2);
+  // lcd.printf("%.1f", maxTemp);
+  // lcd.setCursor(GRAPH_X - 25, GRAPH_Y + GRAPH_HEIGHT - 8);
+  // lcd.printf("%.1f", minTemp);
+  
+  // 绘制数据点和连线
+  for (int i = 1; i < dataCount; i++) {
+    int idx1 = historyFull ? (historyIndex + i - 1) % MAX_POINTS : i - 1;
+    int idx2 = historyFull ? (historyIndex + i) % MAX_POINTS : i;
+    
+    // 计算屏幕坐标
+    int x1 = GRAPH_X + ((i - 1) * GRAPH_WIDTH) / (dataCount - 1);
+    int x2 = GRAPH_X + (i * GRAPH_WIDTH) / (dataCount - 1);
+    
+    int y1 = GRAPH_Y + GRAPH_HEIGHT - ((tempHistory[idx1] - mintemp_) / tempRange) * GRAPH_HEIGHT;
+    int y2 = GRAPH_Y + GRAPH_HEIGHT - ((tempHistory[idx2] - mintemp_) / tempRange) * GRAPH_HEIGHT;
+    
+    // 绘制连线
+    lcd.drawLine(x1, y1, x2, y2, VALUE_COLOR);
+    
+    // 绘制数据点
+    lcd.fillCircle(x2, y2, 1, GOOD_COLOR);
+  }
+  
+  // 显示图中最高温度值
+  if (dataCount > 0) {
+    lcd.fillRect(0, GRAPH_Y + GRAPH_HEIGHT + 5, lcd.width(), ITEM_HEIGHT, BG_COLOR);
+
+    lcd.setTextColor(VALUE_COLOR);
+    lcd.setTextSize(1.7);
+    lcd.setCursor(GRAPH_X + GRAPH_WIDTH - 140, GRAPH_Y + GRAPH_HEIGHT + 5);
+    lcd.printf("Highest: %.1fC", maxTemp);
+  }
+}
+
+/*
 // 绘制设备状态
 void drawDeviceStatus() {
   int y = HEADER_HEIGHT + 6 * ITEM_HEIGHT + 10;
@@ -269,6 +381,7 @@ void drawDeviceStatus() {
   lcd.setCursor(60, y + 8);
   lcd.print(sensorData.lightStatus ? "ON " : "OFF");
 }
+*/
 
 // 更新显示
 void updateDisplay() {
@@ -296,15 +409,18 @@ void updateDisplay() {
   drawSensorItemInt(y, "CO2", sensorData.co2, "ppm", getCO2StatusColor(sensorData.co2));
   y += ITEM_HEIGHT;
   
-  drawSensorItem(y, "Soil Moist", sensorData.soilMoisture, "%", 
-                 getStatusColor(sensorData.soilMoisture, thresholds.soilMin, thresholds.soilMax));
-  y += ITEM_HEIGHT;
+  // drawSensorItem(y, "Soil Moist", sensorData.soilMoisture, "%", 
+  //                getStatusColor(sensorData.soilMoisture, thresholds.soilMin, thresholds.soilMax));
+  // y += ITEM_HEIGHT;
   
   drawSensorItem(y, "Light", sensorData.lightIntensity, "lux", GOOD_COLOR);
   y += ITEM_HEIGHT;
   
   // 绘制设备状态
-  drawDeviceStatus();
+  // drawDeviceStatus();
+
+  // 绘制初始图表框架
+  drawTemperatureGraph();
 }
 
 void setup(void)
@@ -322,7 +438,7 @@ void setup(void)
   drawHeader();
   lcd.setTextColor(TEXT_COLOR);
   lcd.setTextSize(1.5);
-  lcd.setCursor(50, 100);
+  lcd.setCursor(20, 100);
   lcd.print("System Starting...");
   lcd.setCursor(20, 130);
   lcd.print("Initializing Sensors");
@@ -346,28 +462,11 @@ void setup(void)
   Serial.println("Attempting BMP180 init...");
   bmp180Connected = initPressureSensor();  // 气压传感器
   Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
-  
-  /*
-  // 等LCD界面正常工作后，逐个启用传感器测试
-  Serial.println("Initializing sensors...");
-  
-  // 先尝试温湿度传感器
-  lcd.setCursor(20, 160);
-  lcd.print("AHT30...");
-  Serial.println("Attempting AHT30 init...");
-  aht30Connected = initTemperatureHumiditySensor();  // 温湿度传感器
-  Serial.printf("AHT30 result: %s\n", aht30Connected ? "SUCCESS" : "FAILED");
-  
-  // 再尝试气压传感器
-  lcd.setCursor(20, 180);
-  lcd.print("BMP180...");
-  Serial.println("Attempting BMP180 init...");
-  bmp180Connected = initPressureSensor();             // 气压传感器
-  Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
-  */
+
   
   // 显示传感器状态
   lcd.setCursor(20, 210);
+  lcd.setTextSize(2);
   if (aht30Connected && bmp180Connected) {
     lcd.setTextColor(GOOD_COLOR);
     lcd.print("All sensors ready!");
@@ -378,16 +477,26 @@ void setup(void)
     lcd.setTextColor(ALARM_COLOR);
     lcd.print("No sensors found");
   }
-  
-  delay(2000); // 显示状态2秒
-  
+
+  delay(5000); // 显示状态5秒
+
   // 清屏并绘制正常界面
   lcd.fillScreen(BG_COLOR);
   drawHeader();
   
+  // 初始化图表数据
+  for (int i = 0; i < MAX_POINTS; i++) {
+    tempHistory[i] = 0;
+  }
+  historyIndex = 0;
+  historyFull = false;
+  lastGraphUpdate = millis();
+  
   // 初始化传感器数据
   readSensors();
   updateDisplay();
+  
+ 
   
   Serial.println("Greenhouse Monitoring System Started");
   Serial.printf("Sensors: AHT30=%s, BMP180=%s\n", 
@@ -406,11 +515,20 @@ void loop(void)
     // 读取传感器数据
     readSensors();
     
+    // 每10秒记录一次温度数据用于图表
+    if (currentTime - lastGraphUpdate >= GRAPH_UPDATE_INTERVAL) {
+      lastGraphUpdate = currentTime;
+      addTemperatureData(sensorData.temperature);
+    }
+    
     // 更新标题栏（时间）
     drawHeader();
     
     // 更新显示
     updateDisplay();
+    
+    // 绘制温度折线图
+    drawTemperatureGraph();
     
     // 串口输出数据用于调试
     Serial.print("Sensors: ");

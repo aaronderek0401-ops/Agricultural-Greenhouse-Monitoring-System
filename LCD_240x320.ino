@@ -87,15 +87,17 @@ static SensorData sensorData;
 // 传感器连接状态
 static bool aht30Connected = false;
 static bool bmp180Connected = false;
+static bool sgp30Connected = false;
+
 
 static unsigned long lastUpdate = 0;
 static const unsigned long UPDATE_INTERVAL = 2000; // 2秒更新一次
 
 // 颜色定义 (RGB565格式)
 #define BG_COLOR     0x0000      // 白色背景
-#define HEADER_COLOR 0xFFFF      // 绿色标题
+#define HEADER_COLOR 0xFFFF      // 黑色标题
 #define TEXT_COLOR   0xFFFF      // 黑色文字
-#define VALUE_COLOR  0xFFFF      // 黑色数值
+#define VALUE_COLOR  0xFFFF      // 黑色数值 √
 #define ALARM_COLOR  0x07FF      // 红色警告 √
 #define GOOD_COLOR   0xF81F      // 绿色正常 √
 #define WARNING_COLOR 0x001F     // 黄色警告 √
@@ -151,9 +153,20 @@ void readSensors() {
     sensorData.pressure = -999;     // 特殊值表示未连接
     sensorData.elevation = -999;
   }
+
+  // 读取二氧化碳传感器
+  if (sgp30Connected) {
+    int co2, tvoc;
+    readCO2(co2, tvoc);
+    sensorData.co2 = co2;
+    // sensorData.tvoc = tvoc;
+  } else {
+    sensorData.co2 = -999;     // 特殊值表示未连接
+    // sensorData.tvoc = -999;
+  }
   
   // 其他传感器暂时使用模拟数据
-  sensorData.co2 = 800 + random(-100, 100);
+  // sensorData.co2 = 800 + random(-100, 100);
   sensorData.soilMoisture = 55.0 + random(-10, 10);
   sensorData.lightIntensity = 25000 + random(-5000, 5000);
   
@@ -463,14 +476,20 @@ void setup(void)
   bmp180Connected = initPressureSensor();  // 气压传感器
   Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
 
+  // 尝试初始化二氧化碳传感器
+  lcd.setCursor(20, 200);
+  lcd.print("SGP30...");
+  Serial.println("Attempting SGP30 init...");
+  sgp30Connected = initCO2Sensor();  // 二氧化碳传感器
+  Serial.printf("SGP30 result: %s\n", sgp30Connected ? "SUCCESS" : "FAILED");
   
   // 显示传感器状态
-  lcd.setCursor(20, 210);
+  lcd.setCursor(20, 230);
   lcd.setTextSize(2);
-  if (aht30Connected && bmp180Connected) {
+  if (aht30Connected && bmp180Connected && sgp30Connected) {
     lcd.setTextColor(GOOD_COLOR);
     lcd.print("All sensors ready!");
-  } else if (aht30Connected || bmp180Connected) {
+  } else if (aht30Connected || bmp180Connected || sgp30Connected) {
     lcd.setTextColor(WARNING_COLOR);
     lcd.print("Some sensors ready");
   } else {
@@ -499,9 +518,10 @@ void setup(void)
  
   
   Serial.println("Greenhouse Monitoring System Started");
-  Serial.printf("Sensors: AHT30=%s, BMP180=%s\n", 
+  Serial.printf("Sensors: AHT30=%s, BMP180=%s, SGP30=%s\n", 
                 aht30Connected ? "OK" : "FAIL", 
-                bmp180Connected ? "OK" : "FAIL");
+                bmp180Connected ? "OK" : "FAIL",
+                sgp30Connected ? "OK" : "FAIL");
 }
 
 void loop(void)

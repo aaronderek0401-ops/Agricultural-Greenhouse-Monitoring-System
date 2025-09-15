@@ -146,27 +146,27 @@ void setup(void)
   Serial.println("Sensor initialization mode: ALL SENSORS ENABLED");
   
   // 尝试初始化温湿度传感器
-  showSensorStatus("AHT30...", 160);
   Serial.println("Attempting AHT30 init...");
   aht30Connected = initTemperatureHumiditySensor();
+  showSensorStatus("AHT30...", 160, aht30Connected);
   Serial.printf("AHT30 result: %s\n", aht30Connected ? "SUCCESS" : "FAILED");
   
   // 尝试初始化气压传感器
-  showSensorStatus("BMP180...", 180);
   Serial.println("Attempting BMP180 init...");
   bmp180Connected = initPressureSensor();
+  showSensorStatus("BMP180...", 180, bmp180Connected);
   Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
 
   // 尝试初始化二氧化碳传感器
-  showSensorStatus("SGP30...", 200);
   Serial.println("Attempting SGP30 init...");
   sgp30Connected = initCO2Sensor();
+  showSensorStatus("SGP30...", 200, sgp30Connected);
   Serial.printf("SGP30 result: %s\n", sgp30Connected ? "SUCCESS" : "FAILED");
   
   // 尝试初始化光照传感器
-  showSensorStatus("BH1750...", 220);
   Serial.println("Attempting BH1750 init...");
   bh1750Connected = initLightSensor();
+  showSensorStatus("BH1750...", 220, bh1750Connected);
   Serial.printf("BH1750 result: %s\n", bh1750Connected ? "SUCCESS" : "FAILED");
   
   // 显示初始化结果

@@ -133,9 +133,11 @@ void showStartupScreen() {
 }
 
 // 显示传感器初始化状态
-void showSensorStatus(const char* sensor, int y) {
+void showSensorStatus(const char* sensor, int y, bool status) {
   lcd.setCursor(20, y);
+  lcd.setTextColor(status ? GOOD_COLOR : ALARM_COLOR);
   lcd.print(sensor);
+  lcd.print(status ? "OK" : "FAIL");
 }
 
 // 显示初始化完成状态

@@ -12,18 +12,18 @@ static unsigned long sgpStartTime = 0;
 
 bool initCO2Sensor() {
   Serial.println("SGP30 CO2 sensor initializing...");
-  Serial.println("Step 1: Starting Wire.begin() for CO2 sensor");
+  // Serial.println("Step 1: Starting Wire.begin() for CO2 sensor");
   
   // 初始化I2C总线，使用专用引脚
   Wire.begin(CO2_SDA_PIN, CO2_SCL_PIN);
-  Serial.println("Step 2: Wire.begin() completed for CO2 sensor");
+  // Serial.println("Step 2: Wire.begin() completed for CO2 sensor");
   
   delay(100); // 短暂延时让I2C稳定
-  Serial.println("Step 3: About to call sgp.begin()");
+  // Serial.println("Step 3: About to call sgp.begin()");
   
   // 尝试初始化SGP30传感器
   bool success = sgp.begin();
-  Serial.printf("Step 4: sgp.begin() returned %s\n", success ? "true" : "false");
+  // Serial.printf("Step 4: sgp.begin() returned %s\n", success ? "true" : "false");
   
   if (success) {
     Serial.println("SGP30 CO2 sensor connected successfully");
@@ -48,8 +48,8 @@ void readCO2(int &co2, int &tvoc) {
   
   // 检查是否已预热15秒
   if (millis() - sgpStartTime < 15000) {
-    co2 = -888;   // 表示传感器预热中
-    tvoc = -888;
+    co2 = -999;   // 表示传感器预热中
+    tvoc = -999;
     Serial.println("SGP30 still warming up...");
     return;
   }
@@ -58,8 +58,8 @@ void readCO2(int &co2, int &tvoc) {
   if (!sgp.IAQmeasure()) {
     Serial.println("Failed to read from SGP30 sensor!");
     // 使用默认值
-    co2 = -777;
-    tvoc = -777;
+    co2 = -999;
+    tvoc = -999;
     return;
   }
   

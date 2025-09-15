@@ -11,7 +11,7 @@ Adafruit_BMP085 bmp;     // 创建BMP180传感器对象
 
 bool initPressureSensor() {
   Serial.println("BMP180 pressure sensor initializing...");
-  Serial.printf("Using pins: SDA=%d, SCL=%d\n", BMP_SDA_PIN, BMP_SCL_PIN);
+  // Serial.printf("Using pins: SDA=%d, SCL=%d\n", BMP_SDA_PIN, BMP_SCL_PIN);
   
   // 先尝试检测设备是否存在，避免卡死
   Wire.begin(BMP_SDA_PIN, BMP_SCL_PIN);
@@ -48,9 +48,9 @@ void readPressure(float &temperature, float &pressure, float &elevation) {
   if (isnan(temperature) || isnan(pressure)) {
     Serial.println("Failed to read from BMP180 sensor!");
     // 使用默认值
-    temperature = 25.0;
-    pressure = 1013.25;
-    elevation = 0;
+    temperature = -999;
+    pressure = -999;
+    elevation = -999;
     return;
   }
   

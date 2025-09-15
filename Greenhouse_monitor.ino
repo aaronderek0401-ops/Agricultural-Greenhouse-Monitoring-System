@@ -185,6 +185,11 @@ void checkAndAlertAbnormalConditions() {
 void setup(void)
 {
   Serial.begin(115200);
+  delay(1000); // 等待串口稳定
+  Serial.println();
+  Serial.println("======================");
+  Serial.println("ESP32 STARTED!");
+  Serial.println("======================");
   Serial.println("=== Greenhouse Monitoring System ===");
   Serial.println("Initializing...");
   

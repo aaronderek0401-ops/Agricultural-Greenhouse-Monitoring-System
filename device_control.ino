@@ -9,7 +9,7 @@ static bool buzzerEnabled = true;
 // 初始化蜂鸣器
 void initDeviceControl() {
   pinMode(BUZZER_PIN, OUTPUT);
-  Serial.println("蜂鸣器初始化完成");
+  Serial.println("buzzer started");
 }
 
 // 基础蜂鸣器控制

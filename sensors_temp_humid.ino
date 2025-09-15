@@ -8,17 +8,17 @@ Adafruit_AHTX0 aht;
 
 bool initTemperatureHumiditySensor() {
   Serial.println("AHT30 initializing...");
-  Serial.println("Step 1: Starting Wire.begin()");
+  // Serial.println("Step 1: Starting Wire.begin()");
   
   Wire.begin(NEW_SDA_PIN, NEW_SCL_PIN);    // 初始化I2C总线，指定自定义的SDA和SCL引脚
-  Serial.println("Step 2: Wire.begin() completed");
+  // Serial.println("Step 2: Wire.begin() completed");
   
   delay(100); // 短暂延时让I2C稳定
-  Serial.println("Step 3: About to call aht.begin()");
+  // Serial.println("Step 3: About to call aht.begin()");
   
   // 尝试初始化，如果卡住就说明aht.begin()有问题
   bool success = aht.begin();
-  Serial.printf("Step 4: aht.begin() returned %s\n", success ? "true" : "false");
+  // Serial.printf("Step 4: aht.begin() returned %s\n", success ? "true" : "false");
   
   if (success) {
     Serial.println("AHT30 connected successfully");
@@ -45,8 +45,8 @@ void readTemperatureHumidity(float &temperature, float &humidity) {
   if (isnan(humidity) || isnan(temperature)) {
     Serial.println("Failed to read from DHT sensor!");
     // 使用默认值
-    temperature = 25.0;
-    humidity = 60.0;
+    temperature = -999;
+    humidity = -999;
     return;
   }
   

@@ -139,15 +139,22 @@ void showSensorStatus(const char* sensor, int y) {
 }
 
 // 显示初始化完成状态
-void showInitComplete(bool aht30, bool bmp180, bool sgp30) {
-  lcd.setCursor(20, 230);
+void showInitComplete(bool aht30, bool bmp180, bool sgp30, bool bh1750) {
+  lcd.setCursor(20, 240);
   lcd.setTextSize(2);
-  if (aht30 && bmp180 && sgp30) {
+  
+  int connectedCount = 0;
+  if (aht30) connectedCount++;
+  if (bmp180) connectedCount++;
+  if (sgp30) connectedCount++;
+  if (bh1750) connectedCount++;
+  
+  if (connectedCount == 4) {
     lcd.setTextColor(GOOD_COLOR);
     lcd.print("All sensors ready!");
-  } else if (aht30 || bmp180 || sgp30) {
+  } else if (connectedCount > 0) {
     lcd.setTextColor(WARNING_COLOR);
-    lcd.print("Some sensors ready");
+    lcd.printf("%d/%d sensors ready", connectedCount, 4);
   } else {
     lcd.setTextColor(ALARM_COLOR);
     lcd.print("No sensors found");

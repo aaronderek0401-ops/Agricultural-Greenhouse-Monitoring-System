@@ -31,6 +31,7 @@ static SensorData sensorData;
 static bool aht30Connected = false;
 static bool bmp180Connected = false;
 static bool sgp30Connected = false;
+static bool bh1750Connected = false;
 
 // 系统时间管理
 static unsigned long lastUpdate = 0;
@@ -63,9 +64,15 @@ void readSensors() {
     sensorData.tvoc = -999;
   }
   
-  // 其他传感器暂时使用模拟数据
+  // 读取光照传感器
+  if (bh1750Connected) {
+    readLightIntensity(sensorData.lightIntensity);
+  } else {
+    sensorData.lightIntensity = -999; // 特殊值表示未连接
+  }
+  
+  // 土壤湿度传感器暂时使用模拟数据
   sensorData.soilMoisture = 55.0 + random(-10, 10);
-  sensorData.lightIntensity = 25000 + random(-5000, 5000);
   
   // 模拟设备状态
   sensorData.pumpStatus = (sensorData.soilMoisture < thresholds.soilMin);
@@ -112,9 +119,15 @@ void printDebugInfo() {
     Serial.printf("CO2:%dppm ", sensorData.co2);
   }
   
+  // 光照强度
+  if (sensorData.lightIntensity == -999) {
+    Serial.print("Light:disconnected ");
+  } else {
+    Serial.printf("Light:%.1flux ", sensorData.lightIntensity);
+  }
+  
   // 其他传感器（模拟数据）
-  Serial.printf("Soil:%.1f%% Light:%.1flux\n", 
-                sensorData.soilMoisture, sensorData.lightIntensity);
+  Serial.printf("Soil:%.1f%%\n", sensorData.soilMoisture);
 }
 void setup(void)
 {
@@ -150,8 +163,14 @@ void setup(void)
   sgp30Connected = initCO2Sensor();
   Serial.printf("SGP30 result: %s\n", sgp30Connected ? "SUCCESS" : "FAILED");
   
+  // 尝试初始化光照传感器
+  showSensorStatus("BH1750...", 220);
+  Serial.println("Attempting BH1750 init...");
+  bh1750Connected = initLightSensor();
+  Serial.printf("BH1750 result: %s\n", bh1750Connected ? "SUCCESS" : "FAILED");
+  
   // 显示初始化结果
-  showInitComplete(aht30Connected, bmp180Connected, sgp30Connected);
+  showInitComplete(aht30Connected, bmp180Connected, sgp30Connected, bh1750Connected);
   delay(5000); // 显示状态5秒
 
   // 切换到正常运行界面
@@ -162,10 +181,11 @@ void setup(void)
   updateDisplay(sensorData, thresholds);
   
   Serial.println("Greenhouse Monitoring System Started");
-  Serial.printf("Sensors: AHT30=%s, BMP180=%s, SGP30=%s\n", 
+  Serial.printf("Sensors: AHT30=%s, BMP180=%s, SGP30=%s, BH1750=%s\n", 
                 aht30Connected ? "OK" : "FAIL", 
                 bmp180Connected ? "OK" : "FAIL",
-                sgp30Connected ? "OK" : "FAIL");
+                sgp30Connected ? "OK" : "FAIL",
+                bh1750Connected ? "OK" : "FAIL");
 }
 
 void loop(void)

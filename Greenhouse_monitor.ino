@@ -18,8 +18,8 @@ struct SensorData {
 
 // 阈值配置
 struct Thresholds {
-  float tempMin = 18.0, tempMax = 28.0;
-  float humidityMin = 50.0, humidityMax = 80.0;
+  float tempMin = 18.0, tempMax = 29.0;
+  float humidityMin = 45.0, humidityMax = 80.0;
   int co2Min = 400, co2Max = 1200;
   float soilMin = 40.0, soilMax = 70.0;
 } thresholds;
@@ -129,6 +129,59 @@ void printDebugInfo() {
   // 其他传感器（模拟数据）
   Serial.printf("Soil:%.1f%%\n", sensorData.soilMoisture);
 }
+
+// 检查异常情况并发出蜂鸣器警告
+void checkAndAlertAbnormalConditions() {
+  static unsigned long lastAlarmTime = 0;
+  unsigned long currentTime = millis();
+  bool hasAlarm = false;
+  bool hasWarning = false;
+  
+  // 检查温度异常
+  if (sensorData.temperature != -999) {
+    if (sensorData.temperature < thresholds.tempMin || sensorData.temperature > thresholds.tempMax) {
+      if (sensorData.temperature < thresholds.tempMin - 5 || sensorData.temperature > thresholds.tempMax + 5) {
+        hasAlarm = true; // 严重异常
+      } else {
+        hasWarning = true; // 轻微异常
+      }
+    }
+  }
+  
+  // 检查湿度异常
+  if (sensorData.humidity != -999) {
+    if (sensorData.humidity < thresholds.humidityMin || sensorData.humidity > thresholds.humidityMax) {
+      if (sensorData.humidity < thresholds.humidityMin - 10 || sensorData.humidity > thresholds.humidityMax + 10) {
+        hasAlarm = true; // 严重异常
+      } else {
+        hasWarning = true; // 轻微异常
+      }
+    }
+  }
+  
+  // 检查CO2异常
+  if (sensorData.co2 != -999) {
+    if (sensorData.co2 > thresholds.co2Max) {
+      if (sensorData.co2 > thresholds.co2Max + 300) {
+        hasAlarm = true; // 严重异常
+      } else {
+        hasWarning = true; // 轻微异常
+      }
+    }
+  }
+  
+  // 播放相应的蜂鸣器提示音（避免频繁播放）
+  if (hasAlarm && currentTime - lastAlarmTime > 30000) { // 30秒间隔
+    beepAlarm();
+    lastAlarmTime = currentTime;
+    Serial.println("警告: 检测到严重异常情况!");
+  } else if (hasWarning && currentTime - lastAlarmTime > 60000) { // 60秒间隔
+    beepWarning();
+    lastAlarmTime = currentTime;
+    Serial.println("注意: 检测到轻微异常情况");
+  }
+}
+
 void setup(void)
 {
   Serial.begin(115200);
@@ -138,6 +191,9 @@ void setup(void)
   // 初始化显示系统
   initDisplay();
   showStartupScreen();
+  
+  // 初始化设备控制（蜂鸣器）
+  initDeviceControl();
   
   // 初始化时间系统
   initTimeSystem();
@@ -150,27 +206,35 @@ void setup(void)
   aht30Connected = initTemperatureHumiditySensor();
   showSensorStatus("AHT30...", 160, aht30Connected);
   Serial.printf("AHT30 result: %s\n", aht30Connected ? "SUCCESS" : "FAILED");
+  // if (aht30Connected) beepSuccess(); else beepError();
   
   // 尝试初始化气压传感器
   Serial.println("Attempting BMP180 init...");
   bmp180Connected = initPressureSensor();
   showSensorStatus("BMP180...", 180, bmp180Connected);
   Serial.printf("BMP180 result: %s\n", bmp180Connected ? "SUCCESS" : "FAILED");
+  // if (bmp180Connected) beepSuccess(); else beepError();
 
   // 尝试初始化二氧化碳传感器
   Serial.println("Attempting SGP30 init...");
   sgp30Connected = initCO2Sensor();
   showSensorStatus("SGP30...", 200, sgp30Connected);
   Serial.printf("SGP30 result: %s\n", sgp30Connected ? "SUCCESS" : "FAILED");
+  // if (sgp30Connected) beepSuccess(); else beepError();
   
   // 尝试初始化光照传感器
   Serial.println("Attempting BH1750 init...");
   bh1750Connected = initLightSensor();
   showSensorStatus("BH1750...", 220, bh1750Connected);
   Serial.printf("BH1750 result: %s\n", bh1750Connected ? "SUCCESS" : "FAILED");
+  // if (bh1750Connected) beepSuccess(); else beepError();
   
   // 显示初始化结果
   showInitComplete(aht30Connected, bmp180Connected, sgp30Connected, bh1750Connected);
+  
+  // 播放启动完成提示音
+  beepStartup();
+  
   delay(5000); // 显示状态5秒
 
   // 切换到正常运行界面
@@ -198,6 +262,9 @@ void loop(void)
     
     // 读取传感器数据
     readSensors();
+    
+    // 检查异常情况并发出蜂鸣器警告
+    checkAndAlertAbnormalConditions();
     
     // 更新显示 - 先绘制固定内容
     drawHeader();

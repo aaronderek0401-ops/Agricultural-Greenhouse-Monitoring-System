@@ -165,8 +165,8 @@ void showInitComplete(bool aht30, bool bmp180, bool sgp30, bool bh1750) {
 
 // 获取状态颜色
 uint16_t getStatusColor(float value, float min, float max) {
-  if (value < min || value > max) return ALARM_COLOR;
-  if (value < min + (max-min)*0.1 || value > max - (max-min)*0.1) return WARNING_COLOR;
+  if (value < min - 3 || value > max + 3) return ALARM_COLOR;
+  if (value < min || value > max ) return WARNING_COLOR;
   return GOOD_COLOR;
 }
 
@@ -183,6 +183,12 @@ void drawHeader() {
   lcd.setTextSize(1.5);
   lcd.setCursor(10, 8);
   lcd.print("Greenhouse Monitor");
+  
+  // 显示WiFi状态
+  lcd.setTextSize(1);
+  lcd.setCursor(10, 18);
+  String wifiStatus = getWiFiStatusString();
+  lcd.print(wifiStatus);
   
   // 显示时间
   lcd.setTextSize(1);

@@ -20,7 +20,7 @@ struct SensorData {
 struct Thresholds {
   float tempMin = 18.0, tempMax = 29.0;
   float humidityMin = 45.0, humidityMax = 80.0;
-  int co2Min = 400, co2Max = 1200;
+  int co2Min = 300, co2Max = 1200;
   float soilMin = 40.0, soilMax = 70.0;
 } thresholds;
 
@@ -140,7 +140,7 @@ void checkAndAlertAbnormalConditions() {
   // 检查温度异常
   if (sensorData.temperature != -999) {
     if (sensorData.temperature < thresholds.tempMin || sensorData.temperature > thresholds.tempMax) {
-      if (sensorData.temperature < thresholds.tempMin - 5 || sensorData.temperature > thresholds.tempMax + 5) {
+      if (sensorData.temperature < thresholds.tempMin - 3 || sensorData.temperature > thresholds.tempMax + 3) {
         hasAlarm = true; // 严重异常
       } else {
         hasWarning = true; // 轻微异常
@@ -175,7 +175,7 @@ void checkAndAlertAbnormalConditions() {
     beepAlarm();
     lastAlarmTime = currentTime;
     Serial.println("警告: 检测到严重异常情况!");
-  } else if (hasWarning && currentTime - lastAlarmTime > 60000) { // 60秒间隔
+  } else if (hasWarning && currentTime - lastAlarmTime > 10000) { // 10秒间隔
     beepWarning();
     lastAlarmTime = currentTime;
     Serial.println("注意: 检测到轻微异常情况");
@@ -234,6 +234,12 @@ void setup(void)
   Serial.printf("BH1750 result: %s\n", bh1750Connected ? "SUCCESS" : "FAILED");
   // if (bh1750Connected) beepSuccess(); else beepError();
   
+  // 初始化WiFi热点系统
+  Serial.println("Attempting WiFi Hotspot init...");
+  initWiFiHotspot();
+  showSensorStatus("WiFi热点...", 240, true); // WiFi初始化通常会成功
+  Serial.println("WiFi Hotspot result: SUCCESS");
+  
   // 显示初始化结果
   showInitComplete(aht30Connected, bmp180Connected, sgp30Connected, bh1750Connected);
   
@@ -281,6 +287,9 @@ void loop(void)
     // 串口输出调试信息
     printDebugInfo();
   }
+  
+  // 处理WiFi通信（每次循环都检查）
+  wifiLoop();
   
   delay(100); // 短暂延时，避免过度占用CPU
 }

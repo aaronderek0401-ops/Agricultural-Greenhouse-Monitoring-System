@@ -1,8 +1,24 @@
-# 温室监控系统 - 多传感器集成版本
+# 温室监控系统 - WiFi热点版本
 
 ## 项目概述
 
-这是一个基于ESP32和240x320 LCD显示屏的温室监控系统，集成了多种传感器用于全面监控温室环境。系统采用模块化设计，支持传感器热插拔，即使某些传感器失效也能正常工作。系统还包含温度趋势图表显示功能。
+这是一个基于Arduino Nano ESP32和240x320 LCD显示屏的温室监控系统，集成了多种传感器用于全面监控温室环境。系统采用模块化设计，支持传感器热插拔，即使某些传感器失效也能正常工作。**最新更新：支持WiFi热点功能，可通过手机或电脑的Web浏览器实时监控！**
+
+## 🔥 新功能亮点
+
+### WiFi热点监控
+- **无需安装App**：任何设备的浏览器都可访问
+- **现代化Web界面**：响应式设计，自动适配手机和电脑
+- **实时数据更新**：3秒自动刷新，支持手动刷新
+- **多设备支持**：同时支持多个设备连接监控
+- **离线访问**：不需要互联网连接，ESP32直接提供Web服务
+
+### 快速使用指南
+1. 上传代码到Arduino Nano ESP32
+2. 打开串口监视器查看WiFi信息
+3. 手机/电脑连接WiFi热点："ESP32_Greenhouse"（密码：12345678）
+4. 浏览器访问：192.168.4.1
+5. 享受实时监控！
 
 ## 当前文件结构
 
@@ -10,6 +26,7 @@
 Greenhouse_monitor/
 ├── Greenhouse_monitor.ino   # 主程序文件（系统协调和主循环）
 ├── display_manager.ino      # 显示管理模块（LCD控制和图表绘制）
+├── wifi_manager.ino         # WiFi热点和Web服务器模块 🆕
 ├── sensors_temp_humid.ino   # AHT30温湿度传感器模块
 ├── sensors_pressure.ino     # BMP180气压传感器模块
 ├── sensors_co2.ino         # SGP30 CO2传感器模块
@@ -97,27 +114,53 @@ BH1750光照传感器 (I2C):
 1. **LovyanGFX** - LCD显示库
    - 工具 → 管理库 → 搜索"LovyanGFX"
 
-2. **Adafruit AHTX0** - AHT30温湿度传感器
+2. **WiFi** - ESP32 WiFi库（ESP32内置，无需安装）
+
+3. **WebServer** - ESP32 Web服务器库（ESP32内置，无需安装）
+
+4. **Adafruit AHTX0** - AHT30温湿度传感器
    - 工具 → 管理库 → 搜索"Adafruit AHTX0"
 
-3. **Adafruit BMP085 Library** - BMP180气压传感器
+5. **Adafruit BMP085 Library** - BMP180气压传感器
    - 工具 → 管理库 → 搜索"Adafruit BMP085"
 
-4. **Adafruit SGP30** - SGP30 CO2传感器
+6. **Adafruit SGP30** - SGP30 CO2传感器
    - 工具 → 管理库 → 搜索"Adafruit SGP30"
 
-5. **BH1750** - BH1750光照传感器
+7. **BH1750** - BH1750光照传感器
    - 工具 → 管理库 → 搜索"BH1750"
 
-6. **Wire** - I2C通信库（ESP32内置）
+8. **Wire** - I2C通信库（ESP32内置）
 
-7. **Adafruit Sensor** - 传感器抽象库
+9. **Adafruit Sensor** - 传感器抽象库
    - 工具 → 管理库 → 搜索"Adafruit Unified Sensor"
 
 ## 功能特性
 
 ### ✅ 已实现功能
+
+#### 🌐 WiFi热点Web监控（最新功能）
+- **WiFi热点模式**：
+  - 热点名称：ESP32_Greenhouse
+  - 热点密码：12345678
+  - IP地址：192.168.4.1
+- **现代化Web界面**：
+  - 响应式设计，支持手机和电脑访问
+  - 实时数据显示（温度、湿度、气压、CO2、光照）
+  - 系统状态监控和运行时间显示
+  - 3秒自动刷新，支持手动刷新
+- **RESTful API**：
+  - `/api/data` - 获取传感器数据（JSON格式）
+  - `/api/status` - 获取系统状态和连接数
+  - `/api/restart` - 重启ESP32（POST请求）
+- **多设备支持**：
+  - 同时支持多个设备连接
+  - 显示当前连接设备数量
+  - 无需安装任何App，浏览器直接访问
+
+#### 📱 本地LCD显示界面
 - **240x320 LCD显示界面** - 高分辨率彩色显示
+- **WiFi状态显示** - 显示热点状态和连接设备数量
 - **多传感器集成**：
   - AHT30温湿度传感器实时读取
   - BMP180气压传感器实时读取（气压值和海拔估算）
@@ -178,32 +221,98 @@ BH1750...
 4/4 sensors ready!    (或 "3/4 sensors ready" / "No sensors found")
 ```
 
-## 使用方法
+## 📖 使用指南
 
-1. **硬件连接**：按照上面的引脚分配连接LCD和所有传感器
+### 方法一：WiFi热点Web监控（推荐）
+1. **上传代码**：将代码上传到Arduino Nano ESP32
+2. **查看串口信息**：打开串口监视器，查看WiFi热点信息
+3. **连接WiFi**：
+   - 热点名称：`ESP32_Greenhouse`
+   - 密码：`12345678`
+4. **打开浏览器**：访问 `http://192.168.4.1`
+5. **享受监控**：现代化Web界面，支持多设备同时访问
 
-2. **安装库**：在Arduino IDE中安装必要的库
+### 方法二：本地LCD显示
+- LCD屏幕直接显示传感器数据、状态和温度趋势图
+- WiFi状态和连接设备数量显示
 
-3. **配置Arduino IDE**：
-   - 确保选择正确的开发板：工具 → 开发板 → Arduino ESP32 Boards → **Arduino Nano ESP32**
-   - 设置引脚编号模式：工具 → Pin Numbering → **By GPIO number**
-   - 配置编程器：工具 → 编程器 → **Esptool**
-   - 选择正确的COM端口
+### 系统启动流程
 
-4. **修改引脚**：如需修改引脚，在对应的传感器文件中修改：
-   - AHT30引脚：在 `sensors_temp_humid.ino` 中修改 `NEW_SDA_PIN` 和 `NEW_SCL_PIN`
-   - BMP180引脚：在 `sensors_pressure.ino` 中修改 `BMP_SDA_PIN` 和 `BMP_SCL_PIN`
-   - SGP30引脚：在 `sensors_co2.ino` 中修改I2C引脚
-   - BH1750引脚：在 `sensors_light.ino` 中修改 `LIGHT_SDA_PIN`、`LIGHT_SCL_PIN` 和 `LIGHT_ADDR_PIN`
+1. **LCD优先初始化** - 确保屏幕能立即显示状态
+2. **WiFi热点启动** - 创建ESP32_Greenhouse热点 🆕
+3. **蜂鸣器初始化** - 初始化报警系统
+4. **显示启动界面** - "System Starting..." 和传感器初始化进度
+5. **传感器初始化** - 每个传感器有3秒超时保护：
+   - AHT30温湿度传感器
+   - BMP180气压传感器  
+   - SGP30 CO2传感器
+   - BH1750光照传感器
+6. **状态反馈** - 显示哪些传感器成功/失败 (x/4 sensors ready)
+7. **启动完成提示音** - 播放启动完成音乐（短-长-短节奏）
+8. **进入正常运行** - 即使部分传感器失败也能正常工作，并开始异常监控
 
-5. **上传代码**：
-   - 在Arduino IDE中打开`Greenhouse_monitor.ino`
-   - **首次上传**：项目 → **使用编程器上传**
-   - **后续上传**：直接点击上传按钮即可
+### 启动界面显示
+```
+Greenhouse Monitor  00:00
+WiFi: ESP32_Greenhouse ★
+System Starting...
+Initializing Sensors
+AHT30...
+BMP180...
+SGP30...
+BH1750...
+4/4 sensors ready!    (或 "3/4 sensors ready" / "No sensors found")
+```
 
-6. **查看效果**：
-   - LCD屏幕会显示传感器数据、状态指示器和温度趋势图
-   - 串口监视器会输出详细的调试信息
+## 🔧 配置和安装
+
+### 硬件连接
+按照上面的引脚分配连接LCD和所有传感器
+
+### 安装库
+在Arduino IDE中安装必要的库
+
+### 配置Arduino IDE
+- 确保选择正确的开发板：工具 → 开发板 → Arduino ESP32 Boards → **Arduino Nano ESP32**
+- 设置引脚编号模式：工具 → Pin Numbering → **By GPIO number**
+- 配置编程器：工具 → 编程器 → **Esptool**
+- 选择正确的COM端口
+
+### 修改引脚
+如需修改引脚，在对应的传感器文件中修改：
+- AHT30引脚：在 `sensors_temp_humid.ino` 中修改 `NEW_SDA_PIN` 和 `NEW_SCL_PIN`
+- BMP180引脚：在 `sensors_pressure.ino` 中修改 `BMP_SDA_PIN` 和 `BMP_SCL_PIN`
+- SGP30引脚：在 `sensors_co2.ino` 中修改I2C引脚
+- BH1750引脚：在 `sensors_light.ino` 中修改 `LIGHT_SDA_PIN`、`LIGHT_SCL_PIN` 和 `LIGHT_ADDR_PIN`
+
+### 上传代码
+- 在Arduino IDE中打开`Greenhouse_monitor.ino`
+- **首次上传**：项目 → **使用编程器上传**
+- **后续上传**：直接点击上传按钮即可
+
+## 🌐 Web界面功能
+
+访问 `http://192.168.4.1` 后，你将看到：
+
+### 📊 实时数据显示
+- 温度（°C）
+- 湿度（%）
+- 气压（hPa）
+- CO2浓度（ppm）
+- 光照强度（lux）
+- 系统运行时间
+
+### 🎛️ 控制功能
+- **刷新数据**：手动刷新传感器数据
+- **自动刷新**：开启/关闭自动刷新（默认3秒间隔）
+- **状态监控**：实时显示系统状态（正常/警告/错误）
+- **连接统计**：显示当前连接的设备数量
+
+### 📱 响应式设计
+- 自动适配手机、平板、电脑屏幕
+- 现代化界面设计
+- 彩色状态指示器
+- 流畅的用户体验
 
 ## 显示界面说明
 
@@ -236,6 +345,34 @@ BH1750...
 ## 配置说明
 
 如需修改传感器引脚，直接在对应的传感器文件中修改：
+
+### WiFi热点配置 (`wifi_manager.ino`)
+```cpp
+const char* hotspot_ssid = "ESP32_Greenhouse";     // WiFi热点名称
+const char* hotspot_password = "12345678";         // WiFi热点密码（最少8位）
+const IPAddress local_ip(192, 168, 4, 1);         // ESP32 IP地址
+const IPAddress gateway(192, 168, 4, 1);          // 网关地址
+const IPAddress subnet(255, 255, 255, 0);         // 子网掩码
+```
+
+### Web服务器端点
+- **主页**：`http://192.168.4.1/` - 显示监控界面
+- **API数据**：`http://192.168.4.1/api/data` - 获取传感器数据（JSON）
+- **API状态**：`http://192.168.4.1/api/status` - 获取系统状态（JSON）
+- **API重启**：`http://192.168.4.1/api/restart` - 重启ESP32（POST）
+
+### API数据格式
+```json
+{
+  "temperature": 25.3,
+  "humidity": 65.2,
+  "pressure": 1013.25,
+  "co2": 850,
+  "light": 1234.5,
+  "uptime": 12345,
+  "status": "normal"
+}
+```
 
 ### AHT30温湿度传感器 (`sensors_temp_humid.ino`)
 ```cpp
@@ -431,6 +568,8 @@ struct Thresholds {
 
 ### 软件特性
 - **模块化架构**：每个传感器独立模块，便于维护和扩展
+- **WiFi热点Web服务**：现代化Web界面，支持多设备访问 🆕
+- **RESTful API**：标准化JSON数据接口 🆕
 - **容错设计**：单个传感器故障不影响系统运行
 - **实时图表**：温度趋势显示，支持50个数据点历史
 - **智能阈值**：可配置的传感器阈值和状态指示
@@ -438,9 +577,84 @@ struct Thresholds {
 - **调试友好**：详细的串口输出和状态显示
 
 ### 内存使用
-- **Flash**：约150KB（包含所有传感器库）
-- **RAM**：约30KB（包含图表数据缓存）
+- **Flash**：约200KB（包含所有传感器库和Web服务器）
+- **RAM**：约40KB（包含图表数据缓存和Web服务器）
 - **图表数据**：200字节（50个float数据点）
+
+## 💡 使用技巧
+
+### WiFi连接技巧
+1. **信号范围**：ESP32热点覆盖范围约10-20米
+2. **多设备连接**：支持最多4个设备同时连接
+3. **浏览器兼容**：支持Chrome、Firefox、Safari、Edge
+4. **移动设备**：iPhone、Android都可以正常访问
+5. **离线使用**：不需要互联网连接，完全本地运行
+
+### 监控最佳实践
+1. **Web监控**：适合远程监控，多人同时查看
+2. **LCD显示**：适合现场快速查看，无需额外设备
+3. **数据更新**：Web界面3秒自动刷新，LCD 2秒更新
+4. **电源稳定**：建议使用稳定的5V/2A电源适配器
+
+## ❓ 常见问题解答
+
+### Q: 无法连接到WiFi热点？
+**A**: 检查以下几点：
+- 确保ESP32已正常启动（LCD显示正常）
+- 查看串口监视器确认热点已启动
+- 热点名称：`ESP32_Greenhouse`，密码：`12345678`
+- 尝试重启ESP32或重启连接设备
+
+### Q: 浏览器无法打开监控页面？
+**A**: 请检查：
+- 确保已连接到ESP32热点
+- 访问地址：`http://192.168.4.1`（不是https）
+- 尝试关闭其他网络连接（WiFi/移动数据）
+- 清除浏览器缓存或尝试无痕模式
+
+### Q: 传感器显示"disconnected"？
+**A**: 可能原因：
+- 传感器未正确连接或引脚配置错误
+- I2C地址冲突（查看技术规格中的地址分配）
+- 电源供电不足
+- 传感器损坏
+
+### Q: 如何修改WiFi热点名称和密码？
+**A**: 在`wifi_manager.ino`文件中修改：
+```cpp
+const char* hotspot_ssid = "你的热点名称";
+const char* hotspot_password = "你的密码";  // 最少8位
+```
+
+### Q: 为什么Web界面比LCD显示的数据稍有延迟？
+**A**: 这是正常现象：
+- LCD直接从传感器读取（2秒更新）
+- Web界面通过API获取（3秒自动刷新）
+- 可以点击"刷新数据"按钮立即更新
+
+### Q: 能否同时使用WiFi连接到路由器？
+**A**: 当前版本使用热点模式，如需连接路由器需要修改代码：
+- 将WiFi模式改为Station模式
+- 配置路由器的SSID和密码
+- 获取动态IP地址访问
+
+## 🔄 版本历史
+
+### v2.0 (WiFi热点版本) - 2025.09.16
+- ✅ 新增WiFi热点功能
+- ✅ 现代化Web监控界面
+- ✅ RESTful API支持
+- ✅ 多设备同时访问
+- ✅ 响应式设计
+- ✅ 移除蓝牙依赖
+
+### v1.0 (本地LCD版本)
+- ✅ 240x320 LCD显示界面
+- ✅ 多传感器集成
+- ✅ 温度趋势图表
+- ✅ 蜂鸣器报警系统
+- ✅ 智能传感器管理
+- ✅ 模块化架构设计
 
 ### 性能指标
 - **启动时间**：约5-8秒（包含传感器初始化）

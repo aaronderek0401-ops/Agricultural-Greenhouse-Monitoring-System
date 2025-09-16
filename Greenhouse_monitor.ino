@@ -22,6 +22,8 @@ struct Thresholds {
   float humidityMin = 45.0, humidityMax = 80.0;
   int co2Min = 300, co2Max = 1200;
   float soilMin = 40.0, soilMax = 70.0;
+  float pressureMin = 980.0, pressureMax = 1050.0;
+  int lightMin = 100, lightMax = 100000;
 } thresholds;
 
 // 全局变量

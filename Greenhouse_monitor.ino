@@ -237,7 +237,7 @@ void setup(void)
   // 初始化WiFi热点系统
   Serial.println("Attempting WiFi Hotspot init...");
   initWiFiHotspot();
-  showSensorStatus("WiFi热点...", 240, true); // WiFi初始化通常会成功
+  showSensorStatus("WiFi Hotspot...", 240, true); // WiFi初始化通常会成功
   Serial.println("WiFi Hotspot result: SUCCESS");
   
   // 显示初始化结果

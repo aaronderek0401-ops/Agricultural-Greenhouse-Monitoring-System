@@ -3,17 +3,26 @@
 
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 // #include <ArduinoJson.h> // 暂时注释，使用String拼接JSON
 
 // WiFi热点配置
 const char* ap_ssid = "ESP32_Greenhouse";
 const char* ap_password = "12345678"; // 8位密码
 
-// Web服务器
+// IP地址配置
+IPAddress local_IP(192, 168, 4, 1);
+IPAddress gateway(192, 168, 4, 1);
+IPAddress subnet(255, 255, 255, 0);
+
+// Web服务器和DNS服务器
 WebServer server(80);
+DNSServer dnsServer;
+const byte DNS_PORT = 53;
+
 bool wifiConnected = false;
 unsigned long lastDataUpdate = 0;
-const unsigned long DATA_UPDATE_INTERVAL = 2000; // 2秒更新一次数据缓存
+const unsigned long DATA_UPDATE_INTERVAL = 1000; // 1秒更新一次数据缓存
 
 // 传感器数据缓存
 String cachedSensorData = "";
@@ -21,6 +30,9 @@ String cachedSensorData = "";
 // WiFi热点初始化
 void initWiFiHotspot() {
   Serial.println("Initializing WiFi Hotspot...");
+  
+  // 配置IP地址
+  WiFi.softAPConfig(local_IP, gateway, subnet);
   
   // 配置WiFi热点
   WiFi.mode(WIFI_AP);
@@ -32,6 +44,10 @@ void initWiFiHotspot() {
   Serial.println("Hotspot Name: " + String(ap_ssid));
   Serial.println("Hotspot Password: " + String(ap_password));
   
+  // 启动DNS服务器（强制门户）
+  dnsServer.start(DNS_PORT, "*", local_IP);
+  Serial.println("DNS Server started for Captive Portal");
+  
   // 配置Web服务器路由
   setupWebRoutes();
   
@@ -39,14 +55,35 @@ void initWiFiHotspot() {
   server.begin();
   Serial.println("Web Server Started");
   Serial.println("Access URL: http://" + IP.toString());
+  Serial.println("Connect to WiFi and your browser should automatically open the monitoring page!");
   
   wifiConnected = true;
 }
 
+// 检查是否为强制门户请求
+bool isCaptivePortalRequest() {
+  String host = server.hostHeader();
+  // 如果请求的主机不是我们的IP地址，就重定向到监控页面
+  return (host != local_IP.toString());
+}
+
+// 强制门户重定向处理
+void handleCaptivePortal() {
+  if (isCaptivePortalRequest()) {
+    // 重定向到监控页面
+    String redirectURL = "http://" + local_IP.toString() + "/";
+    server.sendHeader("Location", redirectURL);
+    server.send(302, "text/plain", "Redirecting to monitoring page...");
+  } else {
+    // 直接显示监控页面
+    handleRoot();
+  }
+}
+
 // 配置Web服务器路由
 void setupWebRoutes() {
-  // 主页 - 显示监控界面
-  server.on("/", HTTP_GET, handleRoot);
+  // 主页 - 显示监控界面（支持强制门户）
+  server.on("/", HTTP_GET, handleCaptivePortal);
   
   // API - 获取传感器数据(JSON格式)
   server.on("/api/data", HTTP_GET, handleAPIData);
@@ -57,8 +94,16 @@ void setupWebRoutes() {
   // API - 重启系统
   server.on("/api/restart", HTTP_POST, handleAPIRestart);
   
-  // 404页面
-  server.onNotFound(handleNotFound);
+  // 强制门户：捕获所有其他请求并重定向
+  server.onNotFound([](){
+    if (isCaptivePortalRequest()) {
+      String redirectURL = "http://" + local_IP.toString() + "/";
+      server.sendHeader("Location", redirectURL);
+      server.send(302, "text/plain", "Redirecting to monitoring page...");
+    } else {
+      handleNotFound();
+    }
+  });
 }
 
 // 主页处理函数
@@ -127,6 +172,7 @@ String generateWebPage() {
   html += "<div class='header'>";
   html += "<h1>🌱 ESP32 Greenhouse Monitor</h1>";
   html += "<p>Real-time Sensor Data Monitoring</p>";
+  html += "<p style='color: #27ae60; font-size: 14px;'>✅ Auto-opened via Captive Portal</p>";
   html += "</div>";
   
   html += "<div id='sensorData' class='sensor-grid'>";
@@ -216,6 +262,9 @@ bool isWiFiConnected() {
 
 // WiFi管理主循环
 void wifiLoop() {
+  // 处理DNS服务器请求（强制门户）
+  dnsServer.processNextRequest();
+  
   // 处理Web服务器请求
   server.handleClient();
   

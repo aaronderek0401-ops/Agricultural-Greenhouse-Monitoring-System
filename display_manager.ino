@@ -142,7 +142,7 @@ void showSensorStatus(const char* sensor, int y, bool status) {
 
 // 显示初始化完成状态
 void showInitComplete(bool aht30, bool bmp180, bool sgp30, bool bh1750) {
-  lcd.setCursor(20, 240);
+  lcd.setCursor(20, 260);
   lcd.setTextSize(2);
   
   int connectedCount = 0;
@@ -186,7 +186,7 @@ void drawHeader() {
   
   // 显示WiFi状态
   lcd.setTextSize(1);
-  lcd.setCursor(10, 18);
+  lcd.setCursor(10, 20);
   String wifiStatus = getWiFiStatusString();
   lcd.print(wifiStatus);
   

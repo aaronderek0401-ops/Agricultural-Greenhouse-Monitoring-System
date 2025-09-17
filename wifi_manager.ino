@@ -100,6 +100,9 @@ void setupWebRoutes() {
   // API - 设置阈值
   server.on("/api/thresholds", HTTP_POST, handleSetThresholds);
   
+  // API - 获取历史数据
+  server.on("/api/history", HTTP_GET, handleGetHistory);
+  
   // 处理CORS预检请求
   server.on("/api/thresholds", HTTP_OPTIONS, []() {
     server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -261,6 +264,39 @@ void handleSetThresholds() {
   server.send(200, "application/json", "{\"status\":\"success\",\"message\":\"Thresholds updated successfully\"}");
 }
 
+// 获取历史数据API
+void handleGetHistory() {
+  String json = "{\"data\":[";
+  
+  // 从当前索引开始，按时间顺序构建数据
+  bool firstEntry = true;
+  for (int i = 0; i < HISTORY_SIZE; i++) {
+    int index = (historyIndex + i) % HISTORY_SIZE;
+    
+    // 跳过未初始化的数据点（timestamp为0）
+    if (historyData[index].timestamp == 0) continue;
+    
+    if (!firstEntry) {
+      json += ",";
+    }
+    firstEntry = false;
+    
+    json += "{";
+    json += "\"timestamp\":" + String(historyData[index].timestamp) + ",";
+    json += "\"temperature\":" + String(historyData[index].temperature) + ",";
+    json += "\"humidity\":" + String(historyData[index].humidity) + ",";
+    json += "\"co2\":" + String(historyData[index].co2) + ",";
+    json += "\"pressure\":" + String(historyData[index].pressure) + ",";
+    json += "\"lightIntensity\":" + String(historyData[index].lightIntensity);
+    json += "}";
+  }
+  
+  json += "],\"interval\":" + String(HISTORY_INTERVAL) + "}";
+  
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", json);
+}
+
 // 404错误处理
 void handleNotFound() {
   server.send(404, "text/plain", "Page Not Found");
@@ -273,6 +309,8 @@ String generateWebPage() {
   html += "<meta charset='UTF-8'>";
   html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
   html += "<title>ESP32 Greenhouse Monitor</title>";
+  // 直接使用轻量版Chart.js，兼容性更好
+  html += "<script src='https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js'></script>";
   html += "<style>";
   html += "body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }";
   html += ".container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }";
@@ -303,6 +341,25 @@ String generateWebPage() {
   html += ".preset-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }";
   html += ".btn.preset { background: #27ae60; font-size: 13px; padding: 8px 15px; }";
   html += ".btn.preset:hover { background: #219a52; }";
+  
+  // 图表样式
+  html += ".chart-section { margin: 20px 0; padding: 20px; background: white; border-radius: 10px; border: 1px solid #ddd; }";
+  html += ".chart-title { text-align: center; color: #2c3e50; margin-bottom: 15px; }";
+  html += ".chart-controls { text-align: center; margin-bottom: 15px; }";
+  html += ".chart-btn { padding: 6px 12px; margin: 3px; font-size: 12px; }";
+  html += ".chart-btn.active { background: #e74c3c; }";
+  html += ".chart-btn.active:hover { background: #c0392b; }";
+  html += ".chart-container { position: relative; height: 400px; margin: 0 auto; max-width: 100%; }";
+  html += ".chart-container canvas { max-width: 100%; height: auto; }";
+  
+  // 手机端图表优化
+  html += "@media (max-width: 768px) {";
+  html += "  .chart-container { height: 250px; margin: 10px 0; }";
+  html += "  .chart-section { margin: 10px 0; padding: 10px; }";
+  html += "  .chart-btn { padding: 4px 8px; margin: 2px; font-size: 11px; }";
+  html += "  .chart-title { font-size: 16px; margin-bottom: 10px; }";
+  html += "}";
+  
   html += "</style></head><body>";
   
   html += "<div class='container'>";
@@ -322,6 +379,27 @@ String generateWebPage() {
   html += "</div>";
   
   html += "<div id='systemStatus' class='status normal'>System Status: Normal</div>";
+  
+  // 24小时趋势图表区域
+  html += "<div class='chart-section'>";
+  html += "<h3 class='chart-title'>📈 24小时数据趋势</h3>";
+  html += "<div class='chart-controls'>";
+  html += "<button class='btn chart-btn active' onclick='showChart(\"all\")'>全部</button>";
+  html += "<button class='btn chart-btn' onclick='showChart(\"temperature\")'>温度</button>";
+  html += "<button class='btn chart-btn' onclick='showChart(\"humidity\")'>湿度</button>";
+  html += "<button class='btn chart-btn' onclick='showChart(\"co2\")'>CO2</button>";
+  html += "<button class='btn chart-btn' onclick='showChart(\"pressure\")'>气压</button>";
+  html += "<button class='btn chart-btn' onclick='showChart(\"light\")'>光强</button>";
+  html += "</div>";
+  html += "<div class='chart-container'>";
+  html += "<canvas id='trendChart' width='800' height='400'></canvas>";
+  // 备用显示：如果图表加载失败
+  html += "<div id='chartFallback' style='display:none; text-align:center; padding:50px;'>";
+  html += "<p>📊 图表功能暂时不可用</p>";
+  html += "<p>数据正常更新中...</p>";
+  html += "</div>";
+  html += "</div>";
+  html += "</div>";
   
   html += "<div class='controls'>";
   html += "<button class='btn' onclick='refreshData()'>Refresh Data</button>";
@@ -530,9 +608,105 @@ String generateWebPage() {
   html += "}";
   html += "}";
   
+  // 图表相关变量和函数
+  html += "var chartInstance = null;";
+  html += "var currentChartMode = 'all';";
+  html += "var chartData = { labels: [], datasets: [] };";
+  
+  html += "function initChart() {";
+  html += "try {";
+  html += "  if (typeof Chart === 'undefined') {";
+  html += "    document.getElementById('chartFallback').style.display = 'block';";
+  html += "    document.getElementById('trendChart').style.display = 'none';";
+  html += "    return;";
+  html += "  }";
+  html += "  var ctx = document.getElementById('trendChart').getContext('2d');";
+  // 手机端使用简化配置
+  html += "  var isMobile = window.innerWidth <= 768;";
+  html += "  chartInstance = new Chart(ctx, {";
+  html += "type: 'line',";
+  html += "data: chartData,";
+  html += "options: {";
+  html += "responsive: true,";
+  html += "maintainAspectRatio: false,";
+  html += "plugins: { ";
+  html += "  title: { display: !isMobile, text: '24小时传感器数据趋势' },";
+  html += "  legend: { display: !isMobile }";
+  html += "},";
+  html += "scales: {";
+  html += "x: { title: { display: !isMobile, text: '时间' } },";
+  html += "y: { title: { display: !isMobile, text: '数值' } }";
+  html += "},";
+  html += "elements: { point: { radius: isMobile ? 2 : 3 } }";
+  html += "}";
+  html += "});";
+  html += "} catch(error) {";
+  html += "  console.error('Chart initialization failed:', error);";
+  html += "  document.getElementById('chartFallback').style.display = 'block';";
+  html += "  document.getElementById('trendChart').style.display = 'none';";
+  html += "}";
+  html += "}";
+  
+  html += "function updateChart() {";
+  html += "if (!chartInstance) return;";
+  html += "fetch('/api/history').then(function(response) { return response.json(); }).then(function(data) {";
+  html += "var points = data.data;";
+  html += "chartData.labels = points.map(function(p) {";
+  html += "var date = new Date(p.timestamp);";
+  html += "return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');";
+  html += "});";
+  html += "setupChartDatasets(points);";
+  html += "chartInstance.update();";
+  html += "}).catch(function(error) { console.error('Chart update failed:', error); });";
+  html += "}";
+  
+  html += "function setupChartDatasets(points) {";
+  html += "chartData.datasets = [];";
+  html += "if (currentChartMode === 'all' || currentChartMode === 'temperature') {";
+  html += "chartData.datasets.push({";
+  html += "label: '温度 (°C)', data: points.map(function(p) { return p.temperature; }),";
+  html += "borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.1)', tension: 0.4";
+  html += "});";
+  html += "}";
+  html += "if (currentChartMode === 'all' || currentChartMode === 'humidity') {";
+  html += "chartData.datasets.push({";
+  html += "label: '湿度 (%)', data: points.map(function(p) { return p.humidity; }),";
+  html += "borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', tension: 0.4";
+  html += "});";
+  html += "}";
+  html += "if (currentChartMode === 'all' || currentChartMode === 'co2') {";
+  html += "chartData.datasets.push({";
+  html += "label: 'CO2 (ppm)', data: points.map(function(p) { return p.co2; }),";
+  html += "borderColor: '#f39c12', backgroundColor: 'rgba(243,156,18,0.1)', tension: 0.4";
+  html += "});";
+  html += "}";
+  html += "if (currentChartMode === 'all' || currentChartMode === 'pressure') {";
+  html += "chartData.datasets.push({";
+  html += "label: '气压 (hPa)', data: points.map(function(p) { return p.pressure; }),";
+  html += "borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.1)', tension: 0.4";
+  html += "});";
+  html += "}";
+  html += "if (currentChartMode === 'all' || currentChartMode === 'light') {";
+  html += "chartData.datasets.push({";
+  html += "label: '光强 (lux)', data: points.map(function(p) { return p.lightIntensity; }),";
+  html += "borderColor: '#f1c40f', backgroundColor: 'rgba(241,196,15,0.1)', tension: 0.4";
+  html += "});";
+  html += "}";
+  html += "}";
+  
+  html += "function showChart(mode) {";
+  html += "currentChartMode = mode;";
+  html += "document.querySelectorAll('.chart-btn').forEach(function(btn) { btn.classList.remove('active'); });";
+  html += "event.target.classList.add('active');";
+  html += "updateChart();";
+  html += "}";
+  
   html += "window.onload = function() {";
   html += "updateSensorData();";
+  html += "initChart();";
+  html += "updateChart();";
   html += "refreshInterval = setInterval(updateSensorData, 3000);";
+  html += "setInterval(updateChart, 30000);"; // 每30秒更新一次图表
   html += "};";
   html += "</script>";
   

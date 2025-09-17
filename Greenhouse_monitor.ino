@@ -21,10 +21,26 @@ struct Thresholds {
   float tempMin = 18.0, tempMax = 29.0;
   float humidityMin = 45.0, humidityMax = 80.0;
   int co2Min = 300, co2Max = 1200;
-  float soilMin = 40.0, soilMax = 70.0;
-  float pressureMin = 980.0, pressureMax = 1050.0;
-  int lightMin = 100, lightMax = 100000;
+  float pressureMin = 1000.0, pressureMax = 1030.0;
+  int lightMin = 5000, lightMax = 50000;
 } thresholds;
+
+// 历史数据存储结构
+struct HistoryDataPoint {
+  unsigned long timestamp;
+  float temperature;
+  float humidity;
+  int co2;
+  float pressure;
+  float lightIntensity;
+};
+
+// 24小时历史数据存储 (每5分钟一个数据点，共288个点)
+#define HISTORY_SIZE 288
+#define HISTORY_INTERVAL 300000  // 5分钟 = 300000毫秒
+HistoryDataPoint historyData[HISTORY_SIZE];
+int historyIndex = 0;
+unsigned long lastHistoryUpdate = 0;
 
 // 全局变量
 static SensorData sensorData;
@@ -77,9 +93,33 @@ void readSensors() {
   sensorData.soilMoisture = 55.0 + random(-10, 10);
   
   // 模拟设备状态
-  sensorData.pumpStatus = (sensorData.soilMoisture < thresholds.soilMin);
+  sensorData.pumpStatus = (sensorData.soilMoisture < 40.0);
   sensorData.fanStatus = (sensorData.temperature > thresholds.tempMax);
   sensorData.lightStatus = (sensorData.lightIntensity < 20000);
+  
+  // 更新历史数据
+  updateHistoryData();
+}
+
+// 更新历史数据
+void updateHistoryData() {
+  unsigned long currentTime = millis();
+  
+  // 检查是否到了记录历史数据的时间
+  if (currentTime - lastHistoryUpdate >= HISTORY_INTERVAL) {
+    historyData[historyIndex].timestamp = currentTime;
+    historyData[historyIndex].temperature = sensorData.temperature;
+    historyData[historyIndex].humidity = sensorData.humidity;
+    historyData[historyIndex].co2 = sensorData.co2;
+    historyData[historyIndex].pressure = sensorData.pressure;
+    historyData[historyIndex].lightIntensity = sensorData.lightIntensity;
+    
+    // 移动到下一个位置，循环覆盖
+    historyIndex = (historyIndex + 1) % HISTORY_SIZE;
+    lastHistoryUpdate = currentTime;
+    
+    Serial.println("Historical data point recorded at index: " + String(historyIndex));
+  }
 }
 
 // 输出调试信息

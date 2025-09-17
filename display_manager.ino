@@ -101,7 +101,7 @@ static LGFX lcd;
 
 // 温度历史数据
 float tempHistory[MAX_POINTS];
-int historyIndex = 0;
+int graphHistoryIndex = 0;
 bool historyFull = false;
 unsigned long lastGraphUpdate = 0;
 #define GRAPH_UPDATE_INTERVAL 10000  // 10秒更新一次图表数据
@@ -116,7 +116,7 @@ void initDisplay() {
   for (int i = 0; i < MAX_POINTS; i++) {
     tempHistory[i] = 0;
   }
-  historyIndex = 0;
+  graphHistoryIndex = 0;
   historyFull = false;
   lastGraphUpdate = millis();
 }
@@ -265,11 +265,11 @@ void drawSensorItemInt(int y, const char* label, int value, const char* unit, ui
 void addTemperatureData(float temp) {
   if (temp == -999) return; // 跳过无效数据
   
-  tempHistory[historyIndex] = temp;
-  historyIndex++;
+  tempHistory[graphHistoryIndex] = temp;
+  graphHistoryIndex++;
   
-  if (historyIndex >= MAX_POINTS) {
-    historyIndex = 0;
+  if (graphHistoryIndex >= MAX_POINTS) {
+    graphHistoryIndex = 0;
     historyFull = true;
   }
 }
@@ -289,7 +289,7 @@ void drawTemperatureGraph() {
   lcd.print("Temperature Trend (Celsius)");
   
   // 如果没有足够的数据，直接返回
-  int dataCount = historyFull ? MAX_POINTS : historyIndex;
+  int dataCount = historyFull ? MAX_POINTS : graphHistoryIndex;
   if (dataCount < 2) return;
   
   // 计算温度范围
@@ -297,7 +297,7 @@ void drawTemperatureGraph() {
   float mintemp_ = 999, maxtemp_ = -999;
 
   for (int i = 0; i < dataCount; i++) {
-    int idx = historyFull ? (historyIndex + i) % MAX_POINTS : i;
+    int idx = historyFull ? (graphHistoryIndex + i) % MAX_POINTS : i;
     if (tempHistory[idx] < minTemp) minTemp = tempHistory[idx];
     if (tempHistory[idx] > maxTemp) maxTemp = tempHistory[idx];
   }
@@ -322,8 +322,8 @@ void drawTemperatureGraph() {
   
   // 绘制数据点和连线
   for (int i = 1; i < dataCount; i++) {
-    int idx1 = historyFull ? (historyIndex + i - 1) % MAX_POINTS : i - 1;
-    int idx2 = historyFull ? (historyIndex + i) % MAX_POINTS : i;
+    int idx1 = historyFull ? (graphHistoryIndex + i - 1) % MAX_POINTS : i - 1;
+    int idx2 = historyFull ? (graphHistoryIndex + i) % MAX_POINTS : i;
     
     // 计算屏幕坐标
     int x1 = GRAPH_X + ((i - 1) * GRAPH_WIDTH) / (dataCount - 1);

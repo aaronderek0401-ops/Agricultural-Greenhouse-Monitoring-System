@@ -8,6 +8,18 @@
 
 // 外部变量声明 - 引用主文件中的阈值配置
 extern struct Thresholds thresholds;
+extern SensorData sensorData;
+extern bool aht30Connected;
+extern bool bmp180Connected;
+extern bool sgp30Connected;
+extern bool bh1750Connected;
+extern HistoryDataPoint historyData[];
+extern int historyIndex;
+
+// 外部常量声明
+#ifndef HISTORY_SIZE
+#define HISTORY_SIZE 288
+#endif
 
 // WiFi热点配置
 const char* ap_ssid = "ESP32_Greenhouse";
@@ -102,6 +114,12 @@ void setupWebRoutes() {
   
   // API - 获取历史数据
   server.on("/api/history", HTTP_GET, handleGetHistory);
+  
+  // API - 数据导出功能
+  server.on("/api/export", HTTP_GET, handleDataExport);
+  
+  // API - 系统统计信息
+  server.on("/api/stats", HTTP_GET, handleSystemStats);
   
   // 处理CORS预检请求
   server.on("/api/thresholds", HTTP_OPTIONS, []() {
@@ -316,8 +334,14 @@ String generateWebPage() {
   html += ".container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }";
   html += ".header { text-align: center; color: #2c3e50; margin-bottom: 30px; }";
   html += ".sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }";
-  html += ".sensor-card { background: #ecf0f1; padding: 15px; border-radius: 8px; text-align: center; }";
+  html += ".sensor-card { background: #ecf0f1; padding: 15px; border-radius: 8px; text-align: center; transition: background-color 0.3s ease; }";
+  html += ".sensor-card.normal { background: #d5f4e6; border-left: 4px solid #27ae60; }";
+  html += ".sensor-card.warning { background: #fdeaa7; border-left: 4px solid #f39c12; }";
+  html += ".sensor-card.critical { background: #fadbd8; border-left: 4px solid #e74c3c; }";
   html += ".sensor-value { font-size: 24px; font-weight: bold; color: #2980b9; }";
+  html += ".sensor-value.normal { color: #27ae60; }";
+  html += ".sensor-value.warning { color: #f39c12; }";
+  html += ".sensor-value.critical { color: #e74c3c; }";
   html += ".sensor-label { color: #7f8c8d; margin-top: 5px; }";
   html += ".status { padding: 10px; margin: 20px 0; border-radius: 5px; text-align: center; }";
   html += ".status.normal { background: #d5f4e6; color: #27ae60; }";
@@ -405,6 +429,37 @@ String generateWebPage() {
   html += "<button class='btn' onclick='refreshData()'>Refresh Data</button>";
   html += "<button class='btn' onclick='toggleAutoRefresh()'>Auto Refresh: <span id='autoStatus'>ON</span></button>";
   html += "<button class='btn secondary' onclick='toggleThresholds()'>Settings</button>";
+  html += "<button class='btn secondary' onclick='toggleDataExport()'>📊 Export Data</button>";
+  html += "</div>";
+  
+  // 数据导出面板
+  html += "<div id='exportPanel' class='threshold-panel' style='display:none;'>";
+  html += "<h3 style='text-align: center; color: #2c3e50; margin-bottom: 20px;'>📊 Data Export</h3>";
+  html += "<div style='text-align: center; margin-bottom: 20px;'>";
+  html += "<p style='color: #7f8c8d;'>导出传感器历史数据进行分析</p>";
+  html += "</div>";
+  html += "<div class='threshold-grid'>";
+  html += "<div class='threshold-item'>";
+  html += "<h4>📄 CSV格式 (Excel)</h4>";
+  html += "<div style='display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;'>";
+  html += "<button class='btn preset' onclick='exportData(\"csv\", \"1h\")'>1小时</button>";
+  html += "<button class='btn preset' onclick='exportData(\"csv\", \"6h\")'>6小时</button>";
+  html += "<button class='btn preset' onclick='exportData(\"csv\", \"12h\")'>12小时</button>";
+  html += "<button class='btn preset' onclick='exportData(\"csv\", \"24h\")'>24小时</button>";
+  html += "</div></div>";
+  html += "<div class='threshold-item'>";
+  html += "<h4>🔧 JSON格式 (程序)</h4>";
+  html += "<div style='display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;'>";
+  html += "<button class='btn preset' onclick='exportData(\"json\", \"1h\")'>1小时</button>";
+  html += "<button class='btn preset' onclick='exportData(\"json\", \"6h\")'>6小时</button>";
+  html += "<button class='btn preset' onclick='exportData(\"json\", \"12h\")'>12小时</button>";
+  html += "<button class='btn preset' onclick='exportData(\"json\", \"24h\")'>24小时</button>";
+  html += "</div></div>";
+  html += "</div>";
+  html += "<div style='text-align: center; margin-top: 20px;'>";
+  html += "<button class='btn' onclick='showSystemStats()'>📈 System Stats</button>";
+  html += "<button class='btn secondary' onclick='toggleDataExport()'>Close</button>";
+  html += "</div>";
   html += "</div>";
   
   // 阈值设置面板
@@ -475,21 +530,71 @@ String generateWebPage() {
   html += "<div class='refresh-info'>";
   html += "<p>Last Update: <span id='lastUpdate'>--</span></p>";
   html += "<p>Connected Devices: <span id='clientCount'>--</span></p>";
+  // html += "<p>System Stats: <span id='systemStats'>--</span></p>";
   html += "</div>";
+  
+  // 系统统计信息弹窗
+  html += "<div id='statsModal' style='display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000;'>";
+  html += "<div style='position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:white; padding:30px; border-radius:10px; max-width:500px; width:90%;'>";
+  html += "<h3 style='text-align:center; margin-bottom:20px;'>📈 System Statistics</h3>";
+  html += "<div id='statsContent'></div>";
+  html += "<div style='text-align:center; margin-top:20px;'>";
+  html += "<button class='btn' onclick='hideSystemStats()'>Close</button>";
+  html += "</div>";
+  html += "</div>";
+  html += "</div>";
+  
   html += "</div>";
   
   // JavaScript部分
   html += "<script>";
   html += "var autoRefresh = true;";
   html += "var refreshInterval;";
+  html += "var thresholds = {};";
+  
+  html += "function getSensorStatus(value, min, max) {";
+  html += "if (value === null || value === undefined) return 'normal';";
+  html += "if (value < min || value > max) return 'critical';";
+  html += "var range = max - min;";
+  html += "var warningMargin = range * 0.1;";
+  html += "if (value < min + warningMargin || value > max - warningMargin) return 'warning';";
+  html += "return 'normal';";
+  html += "}";
+  
+  html += "function updateSensorCard(elementId, value, status) {";
+  html += "var card = document.getElementById(elementId).parentElement;";
+  html += "var valueElement = document.getElementById(elementId);";
+  html += "card.className = 'sensor-card ' + status;";
+  html += "valueElement.className = 'sensor-value ' + status;";
+  html += "}";
   
   html += "function updateSensorData() {";
-  html += "fetch('/api/data').then(function(response) { return response.json(); }).then(function(data) {";
+  html += "Promise.all([";
+  html += "fetch('/api/data').then(response => response.json()),";
+  html += "fetch('/api/thresholds').then(response => response.json())";
+  html += "]).then(function([data, thresholdData]) {";
+  html += "thresholds = thresholdData;";
+  
   html += "document.getElementById('temperature').textContent = data.temperature !== null ? data.temperature.toFixed(1) : '--';";
+  html += "var tempStatus = getSensorStatus(data.temperature, thresholds.temperature.min, thresholds.temperature.max);";
+  html += "updateSensorCard('temperature', data.temperature, tempStatus);";
+  
   html += "document.getElementById('humidity').textContent = data.humidity !== null ? data.humidity.toFixed(1) : '--';";
+  html += "var humidityStatus = getSensorStatus(data.humidity, thresholds.humidity.min, thresholds.humidity.max);";
+  html += "updateSensorCard('humidity', data.humidity, humidityStatus);";
+  
   html += "document.getElementById('pressure').textContent = data.pressure !== null ? data.pressure.toFixed(1) : '--';";
+  html += "var pressureStatus = getSensorStatus(data.pressure, thresholds.pressure.min, thresholds.pressure.max);";
+  html += "updateSensorCard('pressure', data.pressure, pressureStatus);";
+  
   html += "document.getElementById('co2').textContent = data.co2 !== null ? data.co2 : '--';";
+  html += "var co2Status = getSensorStatus(data.co2, thresholds.co2.min, thresholds.co2.max);";
+  html += "updateSensorCard('co2', data.co2, co2Status);";
+  
   html += "document.getElementById('light').textContent = data.light !== null ? data.light.toFixed(0) : '--';";
+  html += "var lightStatus = getSensorStatus(data.light, thresholds.light.min, thresholds.light.max);";
+  html += "updateSensorCard('light', data.light, lightStatus);";
+  
   html += "document.getElementById('uptime').textContent = data.uptime || '--';";
   
   html += "var statusDiv = document.getElementById('systemStatus');";
@@ -606,6 +711,56 @@ String generateWebPage() {
   html += "document.getElementById('lightMax').value = preset.lightMax;";
   html += "alert('Applied ' + type + ' preset settings!');";
   html += "}";
+  html += "}";
+  
+  // 数据导出功能
+  html += "function toggleDataExport() {";
+  html += "var panel = document.getElementById('exportPanel');";
+  html += "if (panel.style.display === 'none' || panel.style.display === '') {";
+  html += "panel.style.display = 'block';";
+  html += "} else {";
+  html += "panel.style.display = 'none';";
+  html += "}";
+  html += "}";
+  
+  html += "function exportData(format, period) {";
+  html += "var url = '/api/export?format=' + format + '&period=' + period;";
+  html += "window.open(url, '_blank');";
+  html += "var message = '正在下载 ' + period + ' 的 ' + format.toUpperCase() + ' 数据...';";
+  html += "alert(message);";
+  html += "}";
+  
+  html += "function showSystemStats() {";
+  html += "fetch('/api/stats').then(function(response) { return response.json(); }).then(function(data) {";
+  html += "var content = '<div style=\"text-align:left;\">';";
+  html += "content += '<p><strong>运行时间:</strong> ' + Math.floor(data.uptime_seconds / 3600) + '小时 ' + Math.floor((data.uptime_seconds % 3600) / 60) + '分钟</p>';";
+  html += "content += '<p><strong>可用内存:</strong> ' + (data.free_memory / 1024).toFixed(1) + ' KB</p>';";
+  html += "content += '<p><strong>CPU频率:</strong> ' + data.cpu_frequency + ' MHz</p>';";
+  html += "content += '<p><strong>连接设备:</strong> ' + data.wifi_clients + ' 个</p>';";
+  html += "content += '<p><strong>数据点数:</strong> ' + data.total_data_points + ' / 288</p>';";
+  html += "content += '<p><strong>传感器状态:</strong></p>';";
+  html += "content += '<ul>';";
+  html += "content += '<li>AHT30 (温湿度): ' + (data.sensors_connected.aht30 ? '✅ 已连接' : '❌ 未连接') + '</li>';";
+  html += "content += '<li>BMP180 (气压): ' + (data.sensors_connected.bmp180 ? '✅ 已连接' : '❌ 未连接') + '</li>';";
+  html += "content += '<li>SGP30 (CO2): ' + (data.sensors_connected.sgp30 ? '✅ 已连接' : '❌ 未连接') + '</li>';";
+  html += "content += '<li>BH1750 (光照): ' + (data.sensors_connected.bh1750 ? '✅ 已连接' : '❌ 未连接') + '</li>';";
+  html += "content += '</ul>';";
+  html += "if (data.last_hour_average.data_quality > 0) {";
+  html += "content += '<p><strong>最近1小时平均:</strong></p>';";
+  html += "content += '<ul>';";
+  html += "content += '<li>温度: ' + data.last_hour_average.temperature + '°C</li>';";
+  html += "content += '<li>湿度: ' + data.last_hour_average.humidity + '%</li>';";
+  html += "content += '<li>数据质量: ' + data.last_hour_average.data_quality + '%</li>';";
+  html += "content += '</ul>';";
+  html += "}";
+  html += "content += '</div>';";
+  html += "document.getElementById('statsContent').innerHTML = content;";
+  html += "document.getElementById('statsModal').style.display = 'block';";
+  html += "}).catch(function(error) { console.error('Failed to load stats:', error); alert('无法获取系统统计信息'); });";
+  html += "}";
+  
+  html += "function hideSystemStats() {";
+  html += "document.getElementById('statsModal').style.display = 'none';";
   html += "}";
   
   // 图表相关变量和函数
@@ -816,4 +971,144 @@ String getWiFiStatusString() {
   } else {
     return "WiFi: Not Started";
   }
+}
+
+// ===== 数据导出功能模块 =====
+
+// 处理数据导出请求
+void handleDataExport() {
+  String format = server.arg("format");
+  String period = server.arg("period");
+  
+  if (format == "csv") {
+    handleCSVExport(period);
+  } else if (format == "json") {
+    handleJSONExport(period);
+  } else {
+    server.send(400, "text/plain", "Invalid format. Use 'csv' or 'json'");
+  }
+}
+
+// CSV格式导出
+void handleCSVExport(String period) {
+  String csv = "Timestamp,Temperature,Humidity,CO2,Pressure,Light\n";
+  
+  // 根据period参数决定导出范围
+  int dataPoints = HISTORY_SIZE;
+  
+  if (period == "1h") {
+    dataPoints = 12; // 1小时 = 12个5分钟数据点
+  } else if (period == "6h") {
+    dataPoints = 72; // 6小时 = 72个数据点
+  } else if (period == "12h") {
+    dataPoints = 144; // 12小时 = 144个数据点
+  }
+  
+  // 构建CSV数据
+  for (int i = 0; i < dataPoints && i < HISTORY_SIZE; i++) {
+    int index = (historyIndex - dataPoints + i + HISTORY_SIZE) % HISTORY_SIZE;
+    
+    if (historyData[index].timestamp == 0) continue;
+    
+    csv += String(historyData[index].timestamp) + ",";
+    csv += String(historyData[index].temperature) + ",";
+    csv += String(historyData[index].humidity) + ",";
+    csv += String(historyData[index].co2) + ",";
+    csv += String(historyData[index].pressure) + ",";
+    csv += String(historyData[index].lightIntensity) + "\n";
+  }
+  
+  // 设置下载响应头
+  server.sendHeader("Content-Disposition", "attachment; filename=greenhouse_data.csv");
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "text/csv", csv);
+}
+
+// JSON格式导出
+void handleJSONExport(String period) {
+  String json = "{\"export_time\":\"" + String(millis()) + "\",\"data\":[";
+  
+  int dataPoints = HISTORY_SIZE;
+  if (period == "1h") dataPoints = 12;
+  else if (period == "6h") dataPoints = 72;
+  else if (period == "12h") dataPoints = 144;
+  
+  bool firstEntry = true;
+  for (int i = 0; i < dataPoints && i < HISTORY_SIZE; i++) {
+    int index = (historyIndex - dataPoints + i + HISTORY_SIZE) % HISTORY_SIZE;
+    
+    if (historyData[index].timestamp == 0) continue;
+    
+    if (!firstEntry) json += ",";
+    firstEntry = false;
+    
+    json += "{";
+    json += "\"timestamp\":" + String(historyData[index].timestamp) + ",";
+    json += "\"temperature\":" + String(historyData[index].temperature) + ",";
+    json += "\"humidity\":" + String(historyData[index].humidity) + ",";
+    json += "\"co2\":" + String(historyData[index].co2) + ",";
+    json += "\"pressure\":" + String(historyData[index].pressure) + ",";
+    json += "\"lightIntensity\":" + String(historyData[index].lightIntensity);
+    json += "}";
+  }
+  
+  json += "]}";
+  
+  server.sendHeader("Content-Disposition", "attachment; filename=greenhouse_data.json");
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", json);
+}
+
+// 获取系统统计信息
+void handleSystemStats() {
+  String stats = "{";
+  
+  // 数据统计
+  int validDataPoints = 0;
+  for (int i = 0; i < HISTORY_SIZE; i++) {
+    if (historyData[i].timestamp != 0) validDataPoints++;
+  }
+  
+  stats += "\"total_data_points\":" + String(validDataPoints) + ",";
+  stats += "\"uptime_seconds\":" + String(millis() / 1000) + ",";
+  stats += "\"free_memory\":" + String(ESP.getFreeHeap()) + ",";
+  stats += "\"flash_size\":" + String(ESP.getFlashChipSize()) + ",";
+  stats += "\"cpu_frequency\":" + String(ESP.getCpuFreqMHz()) + ",";
+  stats += "\"wifi_clients\":" + String(WiFi.softAPgetStationNum()) + ",";
+  
+  // 传感器状态统计
+  stats += "\"sensors_connected\":{";
+  stats += "\"aht30\":" + String(aht30Connected ? "true" : "false") + ",";
+  stats += "\"bmp180\":" + String(bmp180Connected ? "true" : "false") + ",";
+  stats += "\"sgp30\":" + String(sgp30Connected ? "true" : "false") + ",";
+  stats += "\"bh1750\":" + String(bh1750Connected ? "true" : "false");
+  stats += "},";
+  
+  // 最近一小时数据质量
+  float avgTemp = 0, avgHumidity = 0;
+  int validReadings = 0;
+  for (int i = 0; i < 12 && i < HISTORY_SIZE; i++) { // 最近1小时
+    int index = (historyIndex - 12 + i + HISTORY_SIZE) % HISTORY_SIZE;
+    if (historyData[index].timestamp != 0 && historyData[index].temperature != -999) {
+      avgTemp += historyData[index].temperature;
+      avgHumidity += historyData[index].humidity;
+      validReadings++;
+    }
+  }
+  
+  if (validReadings > 0) {
+    avgTemp /= validReadings;
+    avgHumidity /= validReadings;
+  }
+  
+  stats += "\"last_hour_average\":{";
+  stats += "\"temperature\":" + String(avgTemp, 1) + ",";
+  stats += "\"humidity\":" + String(avgHumidity, 1) + ",";
+  stats += "\"data_quality\":" + String((float)validReadings / 12 * 100, 1);
+  stats += "}";
+  
+  stats += "}";
+  
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", stats);
 }

@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <time.h>
 // #include <ArduinoJson.h> // 暂时注释，使用String拼接JSON
 
 // 外部变量声明 - 引用主文件中的阈值配置
@@ -842,9 +843,17 @@ String generateWebPage() {
   html += "if (!chartInstance) return;";
   html += "fetch('/api/history').then(function(response) { return response.json(); }).then(function(data) {";
   html += "var points = data.data;";
-  html += "chartData.labels = points.map(function(p) {";
-  html += "var date = new Date(p.timestamp);";
-  html += "return date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');";
+  html += "var interval = data.interval || 30000;"; // 获取采样间隔，默认30秒
+  html += "var now = new Date();"; // 当前浏览器时间
+  html += "chartData.labels = points.map(function(p, index) {";
+  html += "var pointsFromEnd = points.length - 1 - index;"; // 距离最新数据点的位置
+  html += "var timeOffset = pointsFromEnd * interval;"; // 时间偏移量（毫秒）
+  html += "var pointTime = new Date(now.getTime() - timeOffset);"; // 计算该数据点的真实时间
+  html += "var hours = pointTime.getHours();";
+  html += "var minutes = pointTime.getMinutes();";
+  html += "var seconds = pointTime.getSeconds();";
+  // html += "return (hours < 10 ? '0' : '') + hours + ':' + (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;";
+  html += "return (hours < 10 ? '0' : '') + hours + ':' + (minutes < 10 ? '0' : '') + minutes;";
   html += "});";
   html += "setupChartDatasets(points);";
   html += "chartInstance.update();";

@@ -423,6 +423,8 @@ String generateWebPage() {
   html += "<p>数据正常更新中...</p>";
   html += "</div>";
   html += "</div>";
+  
+  html += "</div>";
   html += "</div>";
   
   html += "<div class='controls'>";
@@ -553,11 +555,18 @@ String generateWebPage() {
   html += "var thresholds = {};";
   
   html += "function getSensorStatus(value, min, max) {";
-  html += "if (value === null || value === undefined) return 'normal';";
+  html += "if (value === null || value === undefined || value === -999) return 'critical';";
   html += "if (value < min || value > max) return 'critical';";
   html += "var range = max - min;";
   html += "var warningMargin = range * 0.1;";
   html += "if (value < min + warningMargin || value > max - warningMargin) return 'warning';";
+  html += "return 'normal';";
+  html += "}";
+  
+  html += "function getCO2SensorStatus(value, min, max) {";
+  html += "if (value === null || value === undefined || value === -999) return 'critical';";
+  html += "if (value < min || value > max) return 'critical';";
+  html += "if (value < min + 100 || value > max - 100) return 'warning';";
   html += "return 'normal';";
   html += "}";
   
@@ -588,7 +597,7 @@ String generateWebPage() {
   html += "updateSensorCard('pressure', data.pressure, pressureStatus);";
   
   html += "document.getElementById('co2').textContent = data.co2 !== null ? data.co2 : '--';";
-  html += "var co2Status = getSensorStatus(data.co2, thresholds.co2.min, thresholds.co2.max);";
+  html += "var co2Status = getCO2SensorStatus(data.co2, thresholds.co2.min, thresholds.co2.max);";
   html += "updateSensorCard('co2', data.co2, co2Status);";
   
   html += "document.getElementById('light').textContent = data.light !== null ? data.light.toFixed(0) : '--';";
@@ -768,6 +777,27 @@ String generateWebPage() {
   html += "var currentChartMode = 'all';";
   html += "var chartData = { labels: [], datasets: [] };";
   
+  // 自定义Chart.js插件 - 竖线绘制
+  html += "const crosshairPlugin = {";
+  html += "id: 'crosshair',";
+  html += "afterDraw: function(chart) {";
+  html += "if (chart.tooltip._active && chart.tooltip._active.length) {";
+  html += "const activePoint = chart.tooltip._active[0];";
+  html += "const ctx = chart.ctx;";
+  html += "const x = activePoint.element.x;";
+  html += "ctx.save();";
+  html += "ctx.beginPath();";
+  html += "ctx.setLineDash([5, 5]);";
+  html += "ctx.moveTo(x, chart.chartArea.top);";
+  html += "ctx.lineTo(x, chart.chartArea.bottom);";
+  html += "ctx.lineWidth = 2;";
+  html += "ctx.strokeStyle = 'rgba(0,0,0,0.5)';";
+  html += "ctx.stroke();";
+  html += "ctx.restore();";
+  html += "}";
+  html += "}";
+  html += "};";
+  
   html += "function initChart() {";
   html += "try {";
   html += "  if (typeof Chart === 'undefined') {";
@@ -775,6 +805,7 @@ String generateWebPage() {
   html += "    document.getElementById('trendChart').style.display = 'none';";
   html += "    return;";
   html += "  }";
+  html += "  Chart.register(crosshairPlugin);";
   html += "  var ctx = document.getElementById('trendChart').getContext('2d');";
   // 手机端使用简化配置
   html += "  var isMobile = window.innerWidth <= 768;";
@@ -784,9 +815,14 @@ String generateWebPage() {
   html += "options: {";
   html += "responsive: true,";
   html += "maintainAspectRatio: false,";
+  html += "interaction: {";
+  html += "intersect: false,";
+  html += "mode: 'index'";
+  html += "},";
   html += "plugins: { ";
   html += "  title: { display: !isMobile, text: '24小时传感器数据趋势' },";
-  html += "  legend: { display: !isMobile }";
+  html += "  legend: { display: !isMobile },";
+  html += "  crosshair: {}";
   html += "},";
   html += "scales: {";
   html += "x: { title: { display: !isMobile, text: '时间' } },";

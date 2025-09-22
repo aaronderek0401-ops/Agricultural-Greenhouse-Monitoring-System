@@ -22,8 +22,42 @@ struct Thresholds {
   float humidityMin = 45.0, humidityMax = 80.0;
   int co2Min = 300, co2Max = 1200;
   float pressureMin = 1000.0, pressureMax = 1030.0;
-  int lightMin = 5000, lightMax = 50000;
+  int lightMin = 100, lightMax = 10000;  // 修改为更合理的室内光照范围
 } thresholds;
+
+// 传感器状态枚举
+enum SensorStatus {
+  SENSOR_NORMAL = 0,    // 正常状态 - 绿色
+  SENSOR_WARNING = 1,   // 警告状态 - 黄色  
+  SENSOR_CRITICAL = 2,  // 危险状态 - 红色
+  SENSOR_DISCONNECTED = 3 // 未连接 - 红色
+};
+
+// 统一的传感器状态判断函数
+SensorStatus getSensorStatus(float value, float min, float max) {
+  if (value == -999) return SENSOR_DISCONNECTED;
+  if (value < min || value > max) return SENSOR_CRITICAL;
+  
+  // 计算警告边界（阈值范围的10%）
+  float range = max - min;
+  float warningMargin = range * 0.1;
+  if (value < min + warningMargin || value > max - warningMargin) {
+    return SENSOR_WARNING;
+  }
+  return SENSOR_NORMAL;
+}
+
+// CO2专用状态判断（整数类型）
+SensorStatus getCO2SensorStatus(int value, int min, int max) {
+  if (value == -999) return SENSOR_DISCONNECTED;
+  if (value < min || value > max) return SENSOR_CRITICAL;
+  
+  // CO2的警告边界（100ppm）
+  if (value < min + 100 || value > max - 100) {
+    return SENSOR_WARNING;
+  }
+  return SENSOR_NORMAL;
+}
 
 // 历史数据存储结构
 struct HistoryDataPoint {
@@ -174,54 +208,8 @@ void printDebugInfo() {
 
 // 检查异常情况并发出蜂鸣器警告
 void checkAndAlertAbnormalConditions() {
-  static unsigned long lastAlarmTime = 0;
-  unsigned long currentTime = millis();
-  bool hasAlarm = false;
-  bool hasWarning = false;
-  
-  // 检查温度异常
-  if (sensorData.temperature != -999) {
-    if (sensorData.temperature < thresholds.tempMin || sensorData.temperature > thresholds.tempMax) {
-      if (sensorData.temperature < thresholds.tempMin - 3 || sensorData.temperature > thresholds.tempMax + 3) {
-        hasAlarm = true; // 严重异常
-      } else {
-        hasWarning = true; // 轻微异常
-      }
-    }
-  }
-  
-  // 检查湿度异常
-  if (sensorData.humidity != -999) {
-    if (sensorData.humidity < thresholds.humidityMin || sensorData.humidity > thresholds.humidityMax) {
-      if (sensorData.humidity < thresholds.humidityMin - 10 || sensorData.humidity > thresholds.humidityMax + 10) {
-        hasAlarm = true; // 严重异常
-      } else {
-        hasWarning = true; // 轻微异常
-      }
-    }
-  }
-  
-  // 检查CO2异常
-  if (sensorData.co2 != -999) {
-    if (sensorData.co2 > thresholds.co2Max) {
-      if (sensorData.co2 > thresholds.co2Max + 300) {
-        hasAlarm = true; // 严重异常
-      } else {
-        hasWarning = true; // 轻微异常
-      }
-    }
-  }
-  
-  // 播放相应的蜂鸣器提示音（避免频繁播放）
-  if (hasAlarm && currentTime - lastAlarmTime > 30000) { // 30秒间隔
-    beepAlarm();
-    lastAlarmTime = currentTime;
-    Serial.println("警告: 检测到严重异常情况!");
-  } else if (hasWarning && currentTime - lastAlarmTime > 10000) { // 10秒间隔
-    beepWarning();
-    lastAlarmTime = currentTime;
-    Serial.println("注意: 检测到轻微异常情况");
-  }
+  // 使用统一的传感器状态检查函数
+  checkSensorAlarms(sensorData);
 }
 
 void setup(void)

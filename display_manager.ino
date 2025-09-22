@@ -163,17 +163,27 @@ void showInitComplete(bool aht30, bool bmp180, bool sgp30, bool bh1750) {
   }
 }
 
-// 获取状态颜色
+// 获取状态颜色 - 统一判断逻辑
 uint16_t getStatusColor(float value, float min, float max) {
-  if (value < min - 3 || value > max + 3) return ALARM_COLOR;
-  if (value < min || value > max ) return WARNING_COLOR;
-  return GOOD_COLOR;
+  SensorStatus status = getSensorStatus(value, min, max);
+  switch (status) {
+    case SENSOR_NORMAL: return GOOD_COLOR;
+    case SENSOR_WARNING: return WARNING_COLOR;
+    case SENSOR_CRITICAL: return ALARM_COLOR;
+    case SENSOR_DISCONNECTED: return ALARM_COLOR;
+    default: return ALARM_COLOR;
+  }
 }
 
 uint16_t getCO2StatusColor(int value, struct Thresholds& thresholds) {
-  if (value < thresholds.co2Min || value > thresholds.co2Max) return ALARM_COLOR;
-  if (value < thresholds.co2Min + 100 || value > thresholds.co2Max - 100) return WARNING_COLOR;
-  return GOOD_COLOR;
+  SensorStatus status = getCO2SensorStatus(value, thresholds.co2Min, thresholds.co2Max);
+  switch (status) {
+    case SENSOR_NORMAL: return GOOD_COLOR;
+    case SENSOR_WARNING: return WARNING_COLOR;
+    case SENSOR_CRITICAL: return ALARM_COLOR;
+    case SENSOR_DISCONNECTED: return ALARM_COLOR;
+    default: return ALARM_COLOR;
+  }
 }
 
 // 绘制标题栏
@@ -365,7 +375,8 @@ void updateDisplay(SensorData& data, struct Thresholds& thresholds) {
   drawSensorItem(y, "Humidity", data.humidity, "%", humidColor);
   y += ITEM_HEIGHT;
   
-  uint16_t pressureColor = (data.pressure == -999) ? ALARM_COLOR : GOOD_COLOR;
+  uint16_t pressureColor = (data.pressure == -999) ? ALARM_COLOR :
+                           getStatusColor(data.pressure, thresholds.pressureMin, thresholds.pressureMax);
   drawSensorItem(y, "Pressure", data.pressure, "hPa", pressureColor);
   y += ITEM_HEIGHT;
   
@@ -374,7 +385,9 @@ void updateDisplay(SensorData& data, struct Thresholds& thresholds) {
   drawSensorItemInt(y, "CO2", data.co2, "ppm", co2Color);
   y += ITEM_HEIGHT;
   
-  drawSensorItem(y, "Light(lux)", data.lightIntensity, " ", GOOD_COLOR);
+  uint16_t lightColor = (data.lightIntensity == -999) ? ALARM_COLOR :
+                        getStatusColor(data.lightIntensity, thresholds.lightMin, thresholds.lightMax);
+  drawSensorItem(y, "Light(lux)", data.lightIntensity, " ", lightColor);
   y += ITEM_HEIGHT;
 }
 

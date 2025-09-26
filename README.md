@@ -70,8 +70,8 @@ LCD显示屏 (ST7789):
 └── BLK  → GPIO 14
 
 AHT30温湿度传感器 (I2C):
-├── SDA → GPIO 7
-└── SCL → GPIO 6
+├── SDA → GPIO 6
+└── SCL → GPIO 5
 
 BMP180气压传感器 (I2C):
 ├── SDA → GPIO 6

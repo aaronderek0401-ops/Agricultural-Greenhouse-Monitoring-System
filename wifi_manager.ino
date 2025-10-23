@@ -5,6 +5,13 @@
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <time.h>
+<<<<<<< HEAD
+=======
+#include <FS.h>       // 基础文件系统接口
+#include "SPIFFS.h"  // 文件系统支持 (备用)
+#include <LittleFS.h> // 首选文件系统（Nano ESP32常用）
+#include <FFat.h>     // 额外备用：FATFS
+>>>>>>> sencond/master
 // #include <ArduinoJson.h> // 暂时注释，使用String拼接JSON
 
 // 外部变量声明 - 引用主文件中的阈值配置
@@ -43,10 +50,50 @@ const unsigned long DATA_UPDATE_INTERVAL = 1000; // 1秒更新一次数据缓存
 // 传感器数据缓存
 String cachedSensorData = "";
 
+<<<<<<< HEAD
+=======
+// 有效文件系统句柄与名称
+fs::FS* ActiveFS = nullptr;
+const char* ActiveFSName = "None";
+bool useLittleFS = false;
+bool useFFat = false;
+
+>>>>>>> sencond/master
 // WiFi热点初始化
 void initWiFiHotspot() {
   Serial.println("Initializing WiFi Hotspot...");
   
+<<<<<<< HEAD
+=======
+  // 初始化文件系统：优先尝试LittleFS，其次SPIFFS（不影响WiFi启动）
+  Serial.println("Mounting filesystem (LittleFS -> SPIFFS)...");
+  if (LittleFS.begin(true, "/littlefs")) {
+    ActiveFS = &LittleFS;
+    ActiveFSName = "LittleFS";
+    useLittleFS = true;
+    useFFat = false;
+  } else if (SPIFFS.begin(true, "/spiffs")) {
+    ActiveFS = &SPIFFS;
+    ActiveFSName = "SPIFFS";
+    useLittleFS = false;
+    useFFat = false;
+  } else if (FFat.begin(true, "/ffat")) {
+    ActiveFS = &FFat;
+    ActiveFSName = "FFat";
+    useLittleFS = false;
+    useFFat = true;
+  }
+  if (ActiveFS) {
+    size_t total = useLittleFS ? LittleFS.totalBytes() : (useFFat ? FFat.totalBytes() : SPIFFS.totalBytes());
+    size_t used = useLittleFS ? LittleFS.usedBytes() : (useFFat ? FFat.usedBytes() : SPIFFS.usedBytes());
+    Serial.println(String("Filesystem mounted: ") + ActiveFSName);
+    Serial.println("FS Total: " + String(total) + " bytes, Used: " + String(used) + " bytes");
+  } else {
+    Serial.println("Warning: Failed to mount LittleFS (/littlefs), SPIFFS (/spiffs), and FFat (/ffat). Continuing without filesystem.");
+    Serial.println("Tip: In Arduino IDE -> Tools -> Partition Scheme, pick one that includes SPIFFS or LittleFS. Alternatively, enable FFat.");
+  }
+  
+>>>>>>> sencond/master
   // 配置IP地址
   WiFi.softAPConfig(local_IP, gateway, subnet);
   
@@ -107,6 +154,12 @@ void setupWebRoutes() {
   // API - 获取系统状态
   server.on("/api/status", HTTP_GET, handleAPIStatus);
   
+<<<<<<< HEAD
+=======
+  // API - 文件系统诊断
+  server.on("/api/fs", HTTP_GET, handleFSStatus);
+  
+>>>>>>> sencond/master
   // API - 获取阈值设置
   server.on("/api/thresholds", HTTP_GET, handleGetThresholds);
   
@@ -130,6 +183,20 @@ void setupWebRoutes() {
     server.send(200, "text/plain", "");
   });
   
+<<<<<<< HEAD
+=======
+  // 内嵌Chart.js静态文件服务
+  server.on("/js/chart.min.js", HTTP_GET, handleChartJS);
+  
+  // 文件上传管理页面
+  server.on("/upload", HTTP_GET, handleUploadPage);
+  
+  // 文件上传处理
+  server.on("/upload", HTTP_POST, [](){
+    server.send(200, "text/plain", "");
+  }, handleFileUpload);
+  
+>>>>>>> sencond/master
   // API - 重启系统
   server.on("/api/restart", HTTP_POST, handleAPIRestart);
   
@@ -328,8 +395,13 @@ String generateWebPage() {
   html += "<meta charset='UTF-8'>";
   html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
   html += "<title>ESP32 Greenhouse Monitor</title>";
+<<<<<<< HEAD
   // 直接使用轻量版Chart.js，兼容性更好
   html += "<script src='https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js'></script>";
+=======
+  // 使用内嵌的gzip压缩Chart.js，无需外网连接
+  html += "<script src='/js/chart.min.js'></script>";
+>>>>>>> sencond/master
   html += "<style>";
   html += "body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }";
   html += ".container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }";
@@ -433,6 +505,10 @@ String generateWebPage() {
   html += "<button class='btn' onclick='toggleAutoRefresh()'>Auto Refresh: <span id='autoStatus'>ON</span></button>";
   html += "<button class='btn secondary' onclick='toggleThresholds()'>Settings</button>";
   html += "<button class='btn secondary' onclick='toggleDataExport()'>📊 Export Data</button>";
+<<<<<<< HEAD
+=======
+  html += "<button class='btn secondary' onclick='location.href=\"/upload\"'>📁 Upload Chart.js</button>";
+>>>>>>> sencond/master
   html += "</div>";
   
   // 数据导出面板
@@ -1156,4 +1232,268 @@ void handleSystemStats() {
   
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.send(200, "application/json", stats);
+<<<<<<< HEAD
+=======
+}
+
+// 文件系统状态诊断API
+void handleFSStatus() {
+  String status = "{";
+  status += "\"filesystem\":\"" + String(ActiveFSName) + "\",";
+  status += "\"mounted\":" + String(ActiveFS ? "true" : "false") + ",";
+  
+  if (ActiveFS) {
+    size_t total = useLittleFS ? LittleFS.totalBytes() : (useFFat ? FFat.totalBytes() : SPIFFS.totalBytes());
+    size_t used = useLittleFS ? LittleFS.usedBytes() : (useFFat ? FFat.usedBytes() : SPIFFS.usedBytes());
+    status += "\"total_bytes\":" + String(total) + ",";
+    status += "\"used_bytes\":" + String(used) + ",";
+    status += "\"chart_exists\":" + String(ActiveFS->exists("/chart.min.js") ? "true" : "false");
+    
+    if (ActiveFS->exists("/chart.min.js")) {
+      File file = ActiveFS->open("/chart.min.js", "r");
+      if (file) {
+        status += ",\"chart_size\":" + String(file.size());
+        file.close();
+      } else {
+        status += ",\"chart_size\":null";
+      }
+    }
+  } else {
+    status += "\"total_bytes\":0,\"used_bytes\":0,\"chart_exists\":false";
+  }
+  
+  status += "}";
+  
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/json", status);
+}
+
+// 处理Chart.js静态文件请求 - 优先文件系统，回退内置
+void handleChartJS() {
+  Serial.println("Chart.js requested");
+  Serial.println("ActiveFS pointer: " + String(ActiveFS ? "valid" : "null"));
+  Serial.println("ActiveFSName: " + String(ActiveFSName));
+
+  if (ActiveFS) {
+    Serial.println("Checking if /chart.min.js exists...");
+    bool fileExists = ActiveFS->exists("/chart.min.js");
+    Serial.println("File exists: " + String(fileExists ? "true" : "false"));
+    
+    if (fileExists) {
+      Serial.println("Attempting to open /chart.min.js...");
+      File file = ActiveFS->open("/chart.min.js", "r");
+      if (file) {
+        size_t fileSize = file.size();
+        Serial.println(String("SUCCESS: Serving chart.min.js from ") + ActiveFSName + " (size: " + String(fileSize) + ")");
+        server.sendHeader("Content-Type", "application/javascript");
+        server.sendHeader("Cache-Control", "max-age=86400");
+        server.sendHeader("Access-Control-Allow-Origin", "*");
+        server.streamFile(file, "application/javascript");
+        file.close();
+        Serial.println("File served successfully");
+        return;
+      } else {
+        Serial.println("ERROR: Failed to open /chart.min.js despite exists() == true");
+      }
+    } else {
+      Serial.println("WARNING: /chart.min.js not found in FS, using fallback");
+    }
+  } else {
+    Serial.println("ERROR: No filesystem mounted, using fallback");
+  }
+
+  // 作为回退，发送内置的简化Chart.js实现
+  Serial.println("Sending fallback Chart.js");
+  String fallbackChart = createFallbackChart();
+  server.sendHeader("Content-Type", "application/javascript");
+  server.sendHeader("Cache-Control", "max-age=86400");
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.send(200, "application/javascript", fallbackChart);
+  Serial.println("Fallback Chart.js sent");
+}
+
+// 创建备用的Chart.js代码
+String createFallbackChart() {
+  String chart = "";
+  chart += "console.log('Loading fallback Chart.js');";
+  chart += "window.Chart=function(ctx,config){";
+  chart += "this.ctx=ctx;this.config=config;this.data=config.data;";
+  chart += "var canvas=ctx.canvas;var canvasPosition=canvas.getBoundingClientRect();";
+  chart += "canvas.width=canvasPosition.width;canvas.height=canvasPosition.height;";
+  chart += "this.update=function(){this.draw()};";
+  chart += "this.destroy=function(){};";
+  chart += "this.draw=function(){";
+  chart += "var ctx=this.ctx;var data=this.data;if(!data||!data.datasets)return;";
+  chart += "ctx.clearRect(0,0,canvas.width,canvas.height);";
+  chart += "var margin=40;var chartWidth=canvas.width-2*margin;var chartHeight=canvas.height-2*margin;";
+  chart += "var datasets=data.datasets;if(datasets.length===0)return;";
+  chart += "var maxY=0;datasets.forEach(function(dataset){";
+  chart += "dataset.data.forEach(function(point){if(point.y>maxY)maxY=point.y;});});";
+  chart += "if(maxY===0)maxY=100;";
+  chart += "datasets.forEach(function(dataset,i){";
+  chart += "ctx.strokeStyle=dataset.borderColor||'#3498db';ctx.lineWidth=2;ctx.beginPath();";
+  chart += "dataset.data.forEach(function(point,j){";
+  chart += "var x=margin+(j/(dataset.data.length-1))*chartWidth;";
+  chart += "var y=margin+chartHeight-(point.y/maxY)*chartHeight;";
+  chart += "if(j===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});";
+  chart += "ctx.stroke();});";
+  chart += "ctx.strokeStyle='#ccc';ctx.lineWidth=1;";
+  chart += "for(var i=0;i<=5;i++){";
+  chart += "var y=margin+(i/5)*chartHeight;ctx.beginPath();ctx.moveTo(margin,y);ctx.lineTo(margin+chartWidth,y);ctx.stroke();}";
+  chart += "ctx.fillStyle='#666';ctx.font='12px Arial';ctx.textAlign='right';";
+  chart += "for(var i=0;i<=5;i++){";
+  chart += "var value=Math.round(maxY*(5-i)/5);var y=margin+(i/5)*chartHeight+4;";
+  chart += "ctx.fillText(value.toString(),margin-5,y);}";
+  chart += "};this.draw();};";
+  chart += "Chart.register=function(){};Chart.defaults={};";
+  chart += "console.log('Fallback Chart.js loaded');";
+  return chart;
+}
+
+// 文件上传页面
+void handleUploadPage() {
+  String html = "";
+  html += "<!DOCTYPE html><html><head>";
+  html += "<meta charset='UTF-8'>";
+  html += "<title>文件上传 - ESP32温室监控</title>";
+  html += "<style>";
+  html += "body{font-family:Arial,sans-serif;margin:20px;background:#f0f0f0;}";
+  html += ".container{max-width:500px;margin:0 auto;background:white;padding:20px;border-radius:10px;}";
+  html += ".header{text-align:center;color:#2c3e50;margin-bottom:30px;}";
+  html += ".upload-area{border:2px dashed #3498db;padding:20px;text-align:center;margin:20px 0;}";
+  html += "input[type=file]{margin:10px 0;}";
+  html += "button{background:#3498db;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer;}";
+  html += "button:hover{background:#2980b9;}";
+  html += ".info{background:#e8f5e8;padding:10px;border-radius:5px;margin:10px 0;}";
+  html += "</style></head><body>";
+  html += "<div class='container'>";
+  html += "<div class='header'><h1>Chart.js文件上传</h1></div>";
+  html += "<div class='info'>上传chart.min.js文件到设备文件系统来启用完整的图表功能</div>";
+  
+  // 显示文件系统状态（若未挂载，尝试再次挂载）
+  if (!ActiveFS) {
+    Serial.println("Upload page: FS not mounted, retrying mount...");
+    if (LittleFS.begin(true)) {
+      ActiveFS = &LittleFS; ActiveFSName = "LittleFS"; useLittleFS = true;
+    } else if (SPIFFS.begin(true)) {
+      ActiveFS = &SPIFFS; ActiveFSName = "SPIFFS"; useLittleFS = false;
+    }
+  }
+
+  if (!ActiveFS) {
+    html += String("<div class='info' style='color:red;'>❌ 文件系统未初始化，无法上传文件</div>");
+    html += String("<div class='info' style='color:orange;'>⚠️ 请重启设备或重新烧录后重试</div>");
+  } else {
+    size_t totalBytes = useLittleFS ? LittleFS.totalBytes() : (useFFat ? FFat.totalBytes() : SPIFFS.totalBytes());
+    size_t usedBytes = useLittleFS ? LittleFS.usedBytes() : (useFFat ? FFat.usedBytes() : SPIFFS.usedBytes());
+    size_t freeBytes = totalBytes - usedBytes;
+    html += "<div class='info'>📁 " + String(ActiveFSName) + ": " + String(freeBytes/1024) + "KB 可用 / " + String(totalBytes/1024) + "KB 总容量</div>";
+    
+    // 检查当前文件状态
+    File file = ActiveFS->open("/chart.min.js", "r");
+    if (file) {
+      html += "<div class='info'>✅ chart.min.js已存在 (大小: " + String(file.size()) + " bytes)</div>";
+      file.close();
+    } else {
+      html += "<div class='info'>⚠️ chart.min.js不存在，当前使用备用版本</div>";
+    }
+  }
+  
+  html += "<form method='POST' action='/upload' enctype='multipart/form-data'>";
+  html += "<div class='upload-area'>";
+  html += "<p>选择chart.min.js文件:</p>";
+  html += "<input type='file' name='chart' accept='.js' required>";
+  html += "<br><br>";
+  html += "<button type='submit'>上传文件</button>";
+  html += "</div></form>";
+  html += "<div style='text-align:center;margin-top:20px;'>";
+  html += "<a href='/'>← 返回监控页面</a>";
+  html += "</div></div></body></html>";
+  
+  server.send(200, "text/html", html);
+}
+
+// 文件上传处理
+void handleFileUpload() {
+  HTTPUpload& upload = server.upload();
+  static File uploadFile;
+  
+  if (upload.status == UPLOAD_FILE_START) {
+    Serial.println("Upload started: " + upload.filename);
+    
+    // 确保文件系统已初始化
+    if (!ActiveFS) {
+      if (LittleFS.begin(true)) {
+        ActiveFS = &LittleFS; ActiveFSName = "LittleFS"; useLittleFS = true;
+      } else if (SPIFFS.begin(true)) {
+        ActiveFS = &SPIFFS; ActiveFSName = "SPIFFS"; useLittleFS = false;
+      }
+    }
+    if (!ActiveFS) {
+      Serial.println("FS mount failed during upload");
+      server.send(500, "text/plain", "Filesystem not available");
+      return;
+    }
+    
+  // 检查可用空间
+  size_t totalBytes = useLittleFS ? LittleFS.totalBytes() : (useFFat ? FFat.totalBytes() : SPIFFS.totalBytes());
+  size_t usedBytes = useLittleFS ? LittleFS.usedBytes() : (useFFat ? FFat.usedBytes() : SPIFFS.usedBytes());
+  Serial.println(String(ActiveFSName) + " total: " + String(totalBytes) + " bytes, used: " + String(usedBytes) + " bytes");
+    
+    // 如果文件已存在，先删除
+    if (ActiveFS->exists("/chart.min.js")) {
+      ActiveFS->remove("/chart.min.js");
+      Serial.println("Removed existing chart.min.js");
+    }
+    
+    uploadFile = ActiveFS->open("/chart.min.js", "w");
+    if (!uploadFile) {
+      Serial.println("Failed to open file for writing - FS may be full or corrupted");
+      server.send(500, "text/plain", "Failed to create file");
+      return;
+    }
+    Serial.println("File opened for writing successfully");
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (uploadFile) {
+      uploadFile.write(upload.buf, upload.currentSize);
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (uploadFile) {
+      uploadFile.close();
+      Serial.println("Upload completed: " + String(upload.totalSize) + " bytes");
+      
+      // 验证文件是否正确写入
+      if (ActiveFS && ActiveFS->exists("/chart.min.js")) {
+        File testFile = ActiveFS->open("/chart.min.js", "r");
+        if (testFile && testFile.size() == upload.totalSize) {
+          testFile.close();
+          Serial.println("File verification successful");
+          
+          // 发送成功响应
+          String response = "";
+          response += "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
+          response += "<title>上传成功</title></head><body>";
+          response += "<div style='text-align:center;padding:50px;'>";
+          response += "<h2>✅ 文件上传成功!</h2>";
+          response += "<p>chart.min.js已成功上传 (" + String(upload.totalSize) + " bytes)</p>";
+          response += "<p>现在可以使用完整的Chart.js功能了!</p>";
+          response += "<a href='/'>返回监控页面</a> | ";
+          response += "<a href='/upload'>继续上传</a>";
+          response += "</div></body></html>";
+          server.send(200, "text/html", response);
+        } else {
+          if (testFile) testFile.close();
+          Serial.println("File verification failed - size mismatch");
+          server.send(500, "text/plain", "Upload verification failed");
+        }
+      } else {
+        Serial.println("File verification failed - file not found after upload");
+        server.send(500, "text/plain", "File not found after upload");
+      }
+    } else {
+      Serial.println("Upload failed - file handle was null");
+      server.send(500, "text/plain", "Upload failed");
+    }
+  }
+>>>>>>> sencond/master
 }
